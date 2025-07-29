@@ -1,12 +1,25 @@
-//App.tsx
+import { Routes, Route, Navigate } from "react-router-dom";
+import Home from "./pages/home/Home";
+import Login from "./pages/login/Login";
+import Mindmap from "./pages/mindmap/Map";
+import Code from "./pages/code/Code";
+import Meeting from "./pages/meeting/MeetingRoom";
+import Layout from "./layouts/Layout";
+
 function App() {
   return (
-    <div className="flex items-center justify-center w-screen h-screen bg-white">
-      <div className="w-40 h-40 flex items-center justify-center bg-sky-400 text-white text-lg shadow-md rounded">
-        보이니?
-      </div>
-    </div>
+    <Routes>
+      <Route path="/" element={<Navigate to="/login" />} />
+      <Route element={<Layout />}>
+        <Route path="login" element={<Login />} />
+        <Route path="home" element={<Home />} />
+        <Route path="mindmap/:id" element={<Mindmap />} />
+        <Route path="code" element={<Code />} />
+        <Route path="meeting" element={<Meeting />} />
+      </Route>
+    </Routes>
   );
 }
 
-export default App
+export default App;
+
