@@ -1,11 +1,62 @@
-module.exports = {
-  // Add your Tailwind CSS configuration here
+// tailwind.config.js
+export default {
   content: [
-  "./index.html",
-  "./src/**/*.{js,ts,jsx,tsx}"
-],
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}"
+  ],
   theme: {
-	extend: {},
+    extend: {
+        colors: {
+          blue: {
+            50: '#ebf3fe',
+            100: '#e2ecfe',
+            200: '#c8dffc',
+            300: '#3b82f6',
+            400: '#3575cd',
+            500: '#2f68c5',
+            600: '#2c62b9',
+            700: '#243e94',
+            800: '#1b3a6f',
+            900: '#152e56',
+          },
+          sky: {
+            50: '#ebf8fe',
+            100: '#e1f5fe',
+            200: '#c1eefd',
+            300: '#38bdf8',
+            400: '#32aadf',
+            500: '#2d97c6',
+            600: '#2a8eba',
+            700: '#227195',
+            800: '#195570',
+            900: '#144257',
+          },
+          black: {
+            50: '#f2f2f2',
+            100: '#f2f2f2',
+            200: '#ececec',
+            300: '#d8d8d8',
+            400: '#808080',
+            500: '#666666',
+            600: '#4d4d4d',
+            700: '#3a3a3a',
+            800: '#2d2d2d',
+            900: '#000000',
+          },
+          orange: {
+            50: '#fff4e6',
+            100: '#fff6d9',
+            200: '#ffdeb9',
+            300: '#ff9500',
+            400: '#e68060',
+            500: '#cc7700',
+            600: '#bd7000',
+            700: '#995900',
+            800: '#743a00',
+            900: '#593400',
+          },
+        },  
+    },
   },
   plugins: [],
 };
