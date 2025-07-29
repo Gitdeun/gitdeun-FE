@@ -1,39 +1,40 @@
-import { useNavigate } from "react-router-dom";
+import login1 from "../../assets/images/ic_visualize.svg";
+import login2 from "../../assets/images/ic_collaborate.svg";
+import login3 from "../../assets/images/ic_suggest.svg";
 
 export default function Login() {
-  const navigate = useNavigate();
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-white space-y-2">
-      <h2 className="text-xl font-semibold text-gray-800 mb-4">로그인 페이지</h2>
+    <div className="flex flex-col items-center w-full">
+      <div className="flex flex-col items-center w-full mt-[120px] gap-6">
+        <div className="text-[40px] font-medium text-center">
+          <span className="font-bold">하나의 깃허브 링크</span>로<br />
+          모든 아이디어가 확장됩니다.
+        </div>
+        <button className="bg-sky-100 text-sky-600 font-bold text-lg px-[24px] py-[12px] rounded-full hover:scale-105 transition-transform duration-200">
+          마인드맵 만들러가기
+        </button>
+      </div>
 
-      <button
-        onClick={() => navigate("/home")}
-        className="px-4 py-1 border border-gray-300 rounded text-sm text-gray-800 hover:bg-gray-100"
-      >
-        홈으로 이동
-      </button>
-
-      <button
-        onClick={() => navigate("/mindmap/123")}
-        className="px-4 py-1 border border-gray-300 rounded text-sm text-gray-800 hover:bg-gray-100"
-      >
-        마인드맵 이동
-      </button>
-
-      <button
-        onClick={() => navigate("/code")}
-        className="px-4 py-1 border border-gray-300 rounded text-sm text-gray-800 hover:bg-gray-100"
-      >
-        코드 보기
-      </button>
-
-      <button
-        onClick={() => navigate("/meeting")}
-        className="px-4 py-1 border border-gray-300 rounded text-sm text-gray-800 hover:bg-gray-100"
-      >
-        회의 이동
-      </button>
+      <div className="flex gap-[28px] mt-[150px]">
+        <div className="flex flex-col gap-6 w-[330px] items-center justify-between text-center">
+          <img src={login1} alt="visualize icon" className="w-11 h-11" />
+          <div className="text-2xl font-bold">visualize</div>
+          <div className="font-normal text-base">한 줄의 링크가<br/>코드의 구조를 시각으로 바꿔줍니다</div>
+        </div>
+        <div className="w-px h-[172px] bg-gray-400"></div>
+        <div className="flex flex-col gap-6 w-[330px] items-center justify-between text-center">
+          <img src={login2} alt="visualize icon" className="w-11 h-11" />
+          <div className="text-2xl font-bold">collaborate</div>
+          <div className="font-normal text-base">코드를 함께 보고<br/>생각을 자연스럽게 나눕니다</div>
+        </div>
+        <div className="w-px h-[172px] bg-gray-400"></div>
+        <div className="flex flex-col gap-6 w-[330px] items-center justify-between text-center">
+          <img src={login3} alt="visualize icon" className="w-11 h-11" />
+          <div className="text-2xl font-bold">suggest</div>
+          <div className="font-normal text-base">회의에서 나눈 이야기들이<br/>AI의 코드 추천으로 이어집니다</div>
+        </div>
+      </div>
     </div>
   );
 }
