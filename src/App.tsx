@@ -5,10 +5,12 @@ import Mindmap from "./pages/mindmap/Map";
 import Code from "./pages/code/Code";
 import Meeting from "./pages/meeting/MeetingRoom";
 import Layout from "./layouts/Layout";
-
+import OAuthCallback from "./pages/login/OAuthCallback";
 function App() {
   return (
     <Routes>
+      <Route path="/oauth/callback" element={<OAuthCallback />} /> 
+
       <Route path="/" element={<Navigate to="/login" />} />
       <Route element={<Layout />}>
         <Route path="login" element={<Login />} />
@@ -18,6 +20,7 @@ function App() {
         <Route path="meeting" element={<Meeting />} />
       </Route>
     </Routes>
+
   );
 }
 
