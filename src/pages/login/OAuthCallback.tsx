@@ -12,7 +12,7 @@ export default function OAuthCallback() {
 
     if (token) {
       localStorage.setItem("accessToken", token); 
-      navigate("/login");
+      navigate("/mindmap");
     } 
   }, []);
 
