@@ -1,28 +1,25 @@
 import React, { useState } from 'react';
-import Pin from "../../assets/images/ic_pin.svg"
+import MindmapDetailView, {type Mindmap } from './MindmapDetailView.tsx'; // 분리된 상세 페이지 컴포넌트를 import 합니다.
 
-// ChevronRightIcon SVG 컴포넌트
+// --- 아이콘 SVG 컴포넌트 ---
 const ChevronRightIcon = ({ className }: { className?: string }) => (
-  <svg className={className || "w-6 h-6 text-gray-600"} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+  <svg className={className || "w-6 h-6 text-gray-400"} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
   </svg>
 );
 
+const PinIcon = ({ className }: { className?: string }) => (
+    <svg className={className || "w-6 h-6"} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M14 4V10.5C14 11.3284 13.3284 12 12.5 12H11.5C10.6716 12 10 11.3284 10 10.5V4H14Z" />
+        <path fillRule="evenodd" clipRule="evenodd" d="M7 4C7 3.44772 7.44772 3 8 3H16C16.5523 3 17 3.44772 17 4V10.5C17 12.9853 14.9853 15 12.5 15H11.5C9.01472 15 7 12.9853 7 10.5V4ZM9 5V10.5C9 12.433 10.567 14 12.5 14H11.5C9.567 14 8 12.433 8 10.5V5H9Z" />
+        <path d="M12 15V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+);
 
-// 마인드맵 데이터 타입 정의
-interface Mindmap {
-  id: number;
-  link: string;
-  title: string;
-  updated: string;
-  eta?: string; //예상시간
-  pinned?: boolean;
-}
-
-const MindmapGenerator: React.FC = () => {
+// --- 메인 페이지 컴포넌트 ---
+const App: React.FC = () => {
   const [githubLink, setGithubLink] = useState<string>('');
   const [isDevMode, setIsDevMode] = useState<boolean>(true);
-  // 초기 목업 데이터 설정
   const [mindmaps, setMindmaps] = useState<Mindmap[]>([
     { id: 1, link: 'https://github.com/EWSNproject/fe.git', title: '혜택온 프론트엔드', updated: '2025.07.13', eta: '5분예정' },
     { id: 2, link: 'https://github.com/EWSNproject/be.git', title: '혜택온 백엔드', updated: '2025.07.13', pinned: true },
@@ -30,6 +27,7 @@ const MindmapGenerator: React.FC = () => {
   ]);
   const [error, setError] = useState<string>('');
   const [prompt, setPrompt] = useState<string>('');
+  const [selectedMindmap, setSelectedMindmap] = useState<Mindmap | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,76 +50,84 @@ const MindmapGenerator: React.FC = () => {
     setPrompt('');
   };
 
+  const handleMindmapClick = (mindmap: Mindmap) => {
+    setSelectedMindmap(mindmap);
+  };
+
+  // 선택된 마인드맵이 있으면 상세 뷰를 렌더링
+  if (selectedMindmap) {
+    return <MindmapDetailView mindmap={selectedMindmap} onBack={() => setSelectedMindmap(null)} />;
+  }
+
+  // 선택된 마인드맵이 없으면 메인 페이지를 렌더링
   return (
-    <div className="min-h-screen font-sans">
-      <div className="bg-[#C1EBFD] flex flex-col items-center p-4 pt-20 pb-12">
-        <div className="w-full max-w-6xl">
-          <h1 className="text-4xl font-bold text-white text-center mb-10" style={{ textShadow: '1px 1px 3px rgba(0,0,0,0.1)' }}>
-            GitHub 링크로 마인드맵 생성
+    <div className="font-sans">
+      {/* === 상단 하늘색 섹션 === */}
+      <div className="bg-[#DDEFF9] flex flex-col items-center p-4 pt-16 pb-12 sm:pt-20">
+        <div className="w-full max-w-5xl">
+          <h1 className="text-4xl font-bold text-gray-800 text-center mb-12">
+            GitHub 레포지토리, 한눈에 펼쳐지는 마인드맵
           </h1>
 
           <form onSubmit={handleSubmit} className="w-full flex flex-col items-center">
-            <div className="w-full flex items-center bg-[#C1EBFD] rounded-full p-2 shadow-md mb-10 gap-2 h-20 border border-white">
+            <div className="w-full flex items-center bg-white/70 rounded-full p-2 shadow-lg shadow-sky-200/80 mb-8 gap-3 h-20 border border-white">
               <div
                 onClick={() => setIsDevMode(!isDevMode)}
-                className="cursor-pointer bg-white rounded-full ml-3 h-12 relative"
-                style={{ width: '130px' }}
+                className="cursor-pointer bg-sky-100 rounded-full h-full flex-shrink-0 relative flex items-center p-1"
+                style={{ width: '180px' }}
               >
-                {/* 움직이는 동그라미 */}
-                <div className={`absolute top-1 left-1 bg-[#38BDF8] w-10 h-10 rounded-full shadow-md transition-transform duration-300 ease-in-out ${isDevMode ? 'translate-x-0' : 'translate-x-[82px]'}`}></div>
-
-                {/* "개발용" 텍스트 */}
-                <span className={`absolute top-0 left-9 right-1 h-full flex items-center justify-center font-bold text-lg text-sky-700 transition-opacity duration-200 ${isDevMode ? 'opacity-100' : 'opacity-0'}`}>
-                  개발용
-                </span>
-
-                {/* "확인용" 텍스트 */}
-                <span className={`absolute top-0 right-9 left-1 h-full flex items-center justify-center font-bold text-lg text-sky-700 transition-opacity duration-200 ${!isDevMode ? 'opacity-100' : 'opacity-0'}`}>
-                  확인용
-                </span>
+                <div className={`absolute bg-white w-[82px] h-[60px] rounded-full shadow-md transition-transform duration-300 ease-in-out ${isDevMode ? 'translate-x-0' : 'translate-x-[88px]'}`}></div>
+                <div className="relative w-full h-full flex justify-around items-center">
+                    <span className={`font-bold text-lg transition-colors duration-300 ${isDevMode ? 'text-sky-600' : 'text-gray-500'}`}>
+                      개발용
+                    </span>
+                    <span className={`font-bold text-lg transition-colors duration-300 ${!isDevMode ? 'text-sky-600' : 'text-gray-500'}`}>
+                      확인용
+                    </span>
+                </div>
               </div>
               <input
                 type="text"
                 value={githubLink}
                 onChange={(e) => setGithubLink(e.target.value)}
                 placeholder="링크를 추가해 보세요"
-                className="flex-grow p-2 bg-transparent focus:outline-none text-gray-800 text-lg placeholder:text-gray-600"
+                className="flex-grow p-4 h-full bg-transparent focus:outline-none text-gray-700 text-xl placeholder:text-gray-400"
               />
               <button
                 type="submit"
-                className="bg-[#38BDF8] text-white font-bold py-4 px-8 mr-3 rounded-full hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-colors"
+                className="bg-sky-500 text-white font-bold py-4 px-10 h-full rounded-full hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5"
               >
                 생성하기
               </button>
             </div>
             <input
-              className="w-full mb-6 p-3 bg-transparent border-b-2 border-b-sky-500 text-black focus:outline-none "
-              placeholder={isDevMode ? "프롬프트를 작성해주세요." : "마인드맵 제목을 작성해주세요. 미입력시, AI가 자동으로 생성합니다."}
+              className="w-full max-w-4xl p-4 bg-white/50 rounded-2xl text-sky-900 focus:outline-none focus:ring-2 focus:ring-sky-400 transition-colors placeholder:text-sky-800/60 border border-white/80"
+              placeholder={isDevMode ? "프롬프트 작성해주세요." : "마인드맵 제목을 작성해주세요. 미입력시, AI가 자동으로 생성합니다."}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
             />
           </form>
-          {error && <p className="text-red-500 mt-4">{error}</p>}
+          {error && <p className="text-red-500 mt-4 text-center">{error}</p>}
         </div>
       </div>
 
       {/* === 하단 흰색 섹션 === */}
-      <div className="bg-white w-full flex-grow flex flex-col items-center p-4 py-8">
-        <div className="w-full max-w-6xl">
+      <div className="bg-slate-50 w-full flex-grow flex flex-col items-center py-8">
+        <div className="w-full max-w-5xl">
             <section className="w-full">
-              <h2 className="text-2xl font-bold text-black mb-6">생성한 마인드맵</h2>
+              <h2 className="text-2xl font-bold text-gray-800 mb-6 px-2">생성한 마인드맵</h2>
               <div className="space-y-4">
                 {mindmaps.map(mindmap => (
-                  <div key={mindmap.id} className="flex justify-between items-center p-4 rounded-lg hover:bg-gray-50 transition-colors duration-200 cursor-pointer border-b border-gray-100 last:border-b-0">
-                    <div className="flex-1">
+                  <div key={mindmap.id} onClick={() => handleMindmapClick(mindmap)} className="flex justify-between items-center p-6 rounded-2xl bg-white hover:bg-white transition-all duration-300 cursor-pointer border border-slate-200/80 hover:shadow-lg hover:border-slate-300 hover:-translate-y-1">
+                    <div className="flex-1 overflow-hidden">
                       <p className="text-sm text-gray-500 truncate">{mindmap.link}</p>
-                      <h3 className="text-2xl font-bold text-black my-1">{mindmap.title}</h3>
-                      <p className="text-sm text-sky-500">최근 업데이트 {mindmap.updated}</p>
+                      <h3 className="text-2xl font-bold text-gray-900 my-1 truncate">{mindmap.title}</h3>
+                      <p className="text-sm text-sky-500 font-medium">최근 업데이트 {mindmap.updated}</p>
                     </div>
                     <div className="flex items-center gap-4 pl-4">
-                      {mindmap.eta && <span className="text-sm text-gray-500">{mindmap.eta}</span>}
-                      {mindmap.pinned && <img src={Pin} alt="Pin Icon" className="w-6 h-6" />}
-                      <ChevronRightIcon className="w-6 h-6 text-gray-400"/>
+                      {mindmap.eta && <span className="text-sm text-gray-500 bg-gray-100 py-1 px-2 rounded-md">{mindmap.eta}</span>}
+                      {mindmap.pinned && <PinIcon className="w-6 h-6 text-gray-800" />}
+                      <ChevronRightIcon />
                     </div>
                   </div>
                 ))}
@@ -133,4 +139,4 @@ const MindmapGenerator: React.FC = () => {
   );
 };
 
-export default MindmapGenerator;
+export default App;

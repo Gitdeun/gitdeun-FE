@@ -16,7 +16,7 @@
     "@mantine/core": "^8.2.1",
     "@mantine/hooks": "^8.2.1",
     "axios": "^1.11.0",
-    "gojs": "^3.0.24",
+    "gojs": "^3.0.25",
     "js-cookie": "^3.0.5",
     "livekit-client": "^2.15.3",
     "lucide-react": "^0.533.0",
