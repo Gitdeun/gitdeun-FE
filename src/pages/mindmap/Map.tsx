@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
-import MindmapDetailView, {type Mindmap } from './MindmapDetailView.tsx'; // 분리된 상세 페이지 컴포넌트를 import 합니다.
+import { useState } from 'react';
+import MindmapDetailView, { type Mindmap } from './MindmapDetailView';
 
-// --- 아이콘 SVG 컴포넌트 ---
 const ChevronRightIcon = ({ className }: { className?: string }) => (
   <svg className={className || "w-6 h-6 text-gray-400"} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
@@ -16,14 +15,14 @@ const PinIcon = ({ className }: { className?: string }) => (
     </svg>
 );
 
-// --- 메인 페이지 컴포넌트 ---
 const App: React.FC = () => {
   const [githubLink, setGithubLink] = useState<string>('');
   const [isDevMode, setIsDevMode] = useState<boolean>(true);
   const [mindmaps, setMindmaps] = useState<Mindmap[]>([
-    { id: 1, link: 'https://github.com/EWSNproject/fe.git', title: '혜택온 프론트엔드', updated: '2025.07.13', eta: '5분예정' },
-    { id: 2, link: 'https://github.com/EWSNproject/be.git', title: '혜택온 백엔드', updated: '2025.07.13', pinned: true },
-    { id: 3, link: 'https://github.com/porjecy123/fe.git', title: '확인용1', updated: '2025.07.13', pinned: true },
+    { id: 2, link: 'https://github.com/EWSNproject/be.git', title: '혜택온 백엔드', updated: '2025.07.13', pinned: true, type: '개발용' },
+    { id: 3, link: 'https://github.com/porjecy123/fe.git', title: '확인용1', updated: '2025.07.13', pinned: true, type: '확인용' },
+    { id: 1, link: 'https://github.com/EWSNproject/fe.git', title: '혜택온 프론트엔드', updated: '2025.07.13', eta: '5분예정', type: '개발용' },
+    { id: 4, link: 'https://github.com/another/project.git', title: '새로운 프로젝트', updated: '2025.07.12', type: '확인용' },
   ]);
   const [error, setError] = useState<string>('');
   const [prompt, setPrompt] = useState<string>('');
@@ -42,7 +41,8 @@ const App: React.FC = () => {
         link: githubLink,
         title: prompt || `새 마인드맵 ${mindmaps.length + 1}`,
         updated: new Date().toISOString().slice(0, 10).replace(/-/g, '.'),
-        pinned: false
+        pinned: false,
+        type: isDevMode ? '개발용' : '확인용'
     };
 
     setMindmaps(prevMindmaps => [newMindmap, ...prevMindmaps]);
@@ -54,12 +54,35 @@ const App: React.FC = () => {
     setSelectedMindmap(mindmap);
   };
 
+  const pinnedMindmaps = mindmaps.filter(m => m.pinned);
+  const otherMindmaps = mindmaps.filter(m => !m.pinned);
+
   // 선택된 마인드맵이 있으면 상세 뷰를 렌더링
   if (selectedMindmap) {
     return <MindmapDetailView mindmap={selectedMindmap} onBack={() => setSelectedMindmap(null)} />;
   }
 
-  // 선택된 마인드맵이 없으면 메인 페이지를 렌더링
+  // 카드 렌더링을 위한 헬퍼 컴포넌트
+  const MindmapCard = ({ mindmap }: { mindmap: Mindmap }) => (
+    <div onClick={() => handleMindmapClick(mindmap)} className="flex flex-col justify-between p-6 rounded-2xl bg-white transition-all duration-300 cursor-pointer border border-slate-200/80 shadow-md hover:shadow-xl hover:-translate-y-1">
+        <div>
+            <div className="flex items-center gap-2 mb-3">
+                <span className={`w-3 h-3 rounded-full ${mindmap.type === '개발용' ? 'bg-blue-400' : 'bg-indigo-400'}`}></span>
+                <span className="text-sm font-semibold text-gray-600">{mindmap.type}</span>
+            </div>
+            <p className="text-sm text-gray-400 truncate mb-1">{mindmap.link}</p>
+            <h3 className="text-2xl font-bold text-gray-800 my-1 truncate">{mindmap.title}</h3>
+        </div>
+        <div className="flex justify-between items-center mt-4">
+            <p className="text-sm text-orange-500 font-medium">최근 업데이트 {mindmap.updated}</p>
+            <div className="flex items-center gap-2">
+                {mindmap.pinned && <PinIcon className="w-5 h-5 text-gray-700" />}
+                <ChevronRightIcon className="w-5 h-5 text-gray-400" />
+            </div>
+        </div>
+    </div>
+  );
+
   return (
     <div className="font-sans">
       {/* === 상단 하늘색 섹션 === */}
@@ -112,25 +135,21 @@ const App: React.FC = () => {
       </div>
 
       {/* === 하단 흰색 섹션 === */}
-      <div className="bg-slate-50 w-full flex-grow flex flex-col items-center py-8">
-        <div className="w-full max-w-5xl">
+      <div className="bg-white w-full flex-grow flex flex-col items-center py-12">
+        <div className="w-full max-w-5xl px-4">
+            {pinnedMindmaps.length > 0 && (
+                <section className="w-full mb-12">
+                    <h2 className="text-xl font-bold text-gray-800 mb-4 px-2">Pinned</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {pinnedMindmaps.map(mindmap => <MindmapCard key={mindmap.id} mindmap={mindmap} />)}
+                    </div>
+                </section>
+            )}
+
             <section className="w-full">
-              <h2 className="text-2xl font-bold text-gray-800 mb-6 px-2">생성한 마인드맵</h2>
-              <div className="space-y-4">
-                {mindmaps.map(mindmap => (
-                  <div key={mindmap.id} onClick={() => handleMindmapClick(mindmap)} className="flex justify-between items-center p-6 rounded-2xl bg-white hover:bg-white transition-all duration-300 cursor-pointer border border-slate-200/80 hover:shadow-lg hover:border-slate-300 hover:-translate-y-1">
-                    <div className="flex-1 overflow-hidden">
-                      <p className="text-sm text-gray-500 truncate">{mindmap.link}</p>
-                      <h3 className="text-2xl font-bold text-gray-900 my-1 truncate">{mindmap.title}</h3>
-                      <p className="text-sm text-sky-500 font-medium">최근 업데이트 {mindmap.updated}</p>
-                    </div>
-                    <div className="flex items-center gap-4 pl-4">
-                      {mindmap.eta && <span className="text-sm text-gray-500 bg-gray-100 py-1 px-2 rounded-md">{mindmap.eta}</span>}
-                      {mindmap.pinned && <PinIcon className="w-6 h-6 text-gray-800" />}
-                      <ChevronRightIcon />
-                    </div>
-                  </div>
-                ))}
+              <h2 className="text-xl font-bold text-gray-800 mb-4 px-2">mind map</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {otherMindmaps.map(mindmap => <MindmapCard key={mindmap.id} mindmap={mindmap} />)}
               </div>
             </section>
         </div>

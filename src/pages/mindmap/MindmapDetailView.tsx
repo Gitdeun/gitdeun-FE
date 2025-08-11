@@ -9,6 +9,7 @@ export interface Mindmap {
   updated: string;
   eta?: string;
   pinned?: boolean;
+  type: string;
 }
 
 // --- GoJS를 위한 데이터 타입 ---
