@@ -6,7 +6,7 @@ import { InviteModal } from "../../components/mindmap/InviteModal";
 import { toast } from "sonner";
 import type { Mindmap as MindmapType } from '../../types';
 
-// --- 타입 정의 ---
+
 export interface Mindmap extends MindmapType {
   data: MindMapDataNode;
 }
