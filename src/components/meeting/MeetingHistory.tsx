@@ -58,7 +58,7 @@ export function MeetingHistory() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4 max-h-96 overflow-y-auto">
+        <div className="space-y-4 max-h-160 overflow-y-auto">
           {mockMeetingHistory.map((meeting, index) => (
             <div key={meeting.id}>
               <div className="space-y-3 p-3 rounded-lg border bg-card">

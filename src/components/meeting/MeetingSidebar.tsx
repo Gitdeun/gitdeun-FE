@@ -11,24 +11,24 @@ interface MeetingSidebarProps {
 
 export function MeetingSidebar({ isRecording, isActive }: MeetingSidebarProps) {
   return (
-    <div className="w-96 bg-card border-l h-full">
-      <Tabs defaultValue="summary" className="h-full flex flex-col">
-        <TabsList className="grid w-full grid-cols-3 m-4 mb-2">
-          <TabsTrigger value="summary" className="flex items-center gap-2">
+    <div className="h-full w-full flex flex-col bg-white p-4 sm:p-6">
+      <Tabs defaultValue="summary" className="flex flex-col flex-1 min-h-0">
+        <TabsList className="grid w-full grid-cols-3 bg-slate-100 p-1 h-auto rounded-lg">
+          <TabsTrigger value="summary" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md">
             <FileText className="w-4 h-4" />
             요약
           </TabsTrigger>
-          <TabsTrigger value="chat" className="flex items-center gap-2">
+          <TabsTrigger value="chat" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md">
             <MessageCircle className="w-4 h-4" />
             채팅
           </TabsTrigger>
-          <TabsTrigger value="history" className="flex items-center gap-2">
+          <TabsTrigger value="history" className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md">
             <Clock className="w-4 h-4" />
             기록
           </TabsTrigger>
         </TabsList>
-        
-        <div className="flex-1 px-4 pb-4">
+
+        <div className="flex-1 mt-4 overflow-y-auto min-h-0">
           <TabsContent value="summary" className="h-full m-0">
             <MeetingSummary isRecording={isRecording} isActive={isActive} />
           </TabsContent>

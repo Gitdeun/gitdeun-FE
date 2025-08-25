@@ -1,18 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
 import { ParticipantsList } from './ParticipantsList';
-import { 
-  Play, 
-  Square, 
-  Mic, 
-  MicOff, 
-  Video, 
-  VideoOff, 
-  Settings,
+import {
+  Mic,
+  MicOff,
   Phone,
-  Sparkles
+  Sparkles,
+  Users,
+  User,
 } from 'lucide-react';
 
 interface Participant {
@@ -29,218 +24,171 @@ interface MeetingRoomProps {
   onToggleRecording: () => void;
 }
 
-export function MeetingRoom({ 
-  isActive, 
-  isRecording, 
-  onToggleMeeting, 
-  onToggleRecording 
+// 음성 회의용 컨트롤 버튼
+const ControlButton = ({
+  Icon,
+  label,
+  onClick,
+  variant = 'default',
+}: {
+  Icon: React.ElementType;
+  label: string;
+  onClick?: () => void;
+  variant?: 'default' | 'danger';
+}) => (
+  <div className="flex flex-col items-center gap-1.5">
+    <Button
+      onClick={onClick}
+      variant="ghost"
+      size="icon"
+      className={`
+        rounded-2xl h-16 w-16 text-slate-800 bg-slate-200/80 hover:bg-slate-300/80
+        ${variant === 'danger' && 'bg-red-500 hover:bg-red-600 text-white'}
+      `}
+    >
+      <Icon className="w-7 h-7" />
+    </Button>
+    <span className="text-sm font-medium text-slate-700">{label}</span>
+  </div>
+);
+
+// 참가자 카드 컴포넌트
+const ParticipantCard = ({ participant }: { participant: Participant }) => {
+    const isSpeaking = participant.status === 'speaking';
+    return (
+        <div className="flex flex-col items-center justify-center gap-3 text-center">
+            <div className={`
+                relative rounded-full p-2
+                ${isSpeaking ? 'bg-green-400' : ''}
+                transition-all duration-300
+            `}>
+                <div className="w-24 h-24 bg-slate-200 rounded-full flex items-center justify-center">
+                    {participant.avatar ? (
+                        <img src={participant.avatar} alt={participant.nickname} className="w-full h-full rounded-full object-cover" />
+                    ) : (
+                        <User className="w-12 h-12 text-slate-500" />
+                    )}
+                </div>
+            </div>
+            <span className="font-semibold text-slate-800">{participant.nickname}</span>
+        </div>
+    );
+};
+
+
+export function MeetingRoom({
+  isActive,
 }: MeetingRoomProps) {
   const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
   const [meetingDuration, setMeetingDuration] = useState(0);
   const [autoSummaryGenerated, setAutoSummaryGenerated] = useState(false);
+  const [isParticipantsOpen, setIsParticipantsOpen] = useState(true);
 
   const mockParticipants: Participant[] = [
     { id: '1', nickname: '개발자김', status: 'speaking' },
     { id: '2', nickname: '기획자박', status: 'online' },
     { id: '3', nickname: '디자이너이', status: 'muted' },
-    { id: '4', nickname: 'Frontend조', status: 'online' }
+    { id: '4_1', nickname: 'Frontend조', status: 'online' },
+    { id: '4_2', nickname: 'Backend최', status: 'online' },
+    { id: '4_3', nickname: 'Infra담당', status: 'online' },
   ];
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isActive) {
       interval = setInterval(() => {
-        setMeetingDuration(prev => {
-          const newDuration = prev + 1;
-          // 회의 종료 1분 이내 자동 요약 생성 시뮬레이션
-          if (!autoSummaryGenerated && newDuration >= 60) {
-            setAutoSummaryGenerated(true);
-            setTimeout(() => {
-              alert('회의가 1분 경과했습니다. AI 요약이 자동 생성되었습니다!');
-            }, 1000);
-          }
-          return newDuration;
-        });
+        setMeetingDuration(prev => prev + 1);
       }, 1000);
     } else {
       setMeetingDuration(0);
+    }
+    return () => clearInterval(interval);
+  }, [isActive]);
+
+  useEffect(() => {
+    if (isActive && meetingDuration >= 60 && !autoSummaryGenerated) {
+      setAutoSummaryGenerated(true);
+      setTimeout(() => {
+        alert('회의가 1분 경과했습니다. AI 요약이 자동 생성되었습니다!');
+      }, 1000);
+    }
+    if (!isActive) {
       setAutoSummaryGenerated(false);
     }
+  }, [isActive, meetingDuration, autoSummaryGenerated]);
 
-    return () => clearInterval(interval);
-  }, [isActive, autoSummaryGenerated]);
 
   const formatDuration = (seconds: number) => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
+    const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return hrs > 0 
-      ? `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-      : `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   const handleCodeRecommendation = () => {
-    alert('AI 코드 추천 기능이 활성화되었습니다. 회의 내용을 분석하여 관련 코드를 추천해드리겠습니다.');
+    alert('AI 코드 추천 기능이 활성화되었습니다.');
   };
 
   return (
-    <div className="flex-1 p-6 space-y-6">
-      {/* 회의 헤더 */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="space-y-2">
-              <CardTitle className="flex items-center gap-3">
-                깃든 프로젝트 회의
-                {isActive && (
-                  <Badge variant="default" className="bg-green-500 animate-pulse">
-                    진행 중
-                  </Badge>
-                )}
-                {isRecording && (
-                  <Badge variant="destructive" className="animate-pulse">
-                    <div className="w-2 h-2 bg-white rounded-full mr-2"></div>
-                    녹음 중
-                  </Badge>
-                )}
-              </CardTitle>
+    <div className="w-full h-full flex flex-col bg-white">
+      <div className="flex-1 flex min-h-0">
+        <main className="flex-1 flex flex-col p-4 relative items-center justify-center">
+          {/* 상단 정보 */}
+          <div className="absolute top-6 left-6 z-10 bg-white/60 backdrop-blur-sm p-2 px-4 rounded-lg border border-slate-200/80">
+              <h2 className="font-semibold text-slate-800">깃든 프로젝트 회의</h2>
               {isActive && (
-                <p className="text-muted-foreground">진행 시간: {formatDuration(meetingDuration)}</p>
+                  <p className="text-xs text-slate-500">
+                      진행 시간: {formatDuration(meetingDuration)}
+                  </p>
               )}
-            </div>
-            <div className="flex items-center gap-2">
-              {autoSummaryGenerated && (
-                <Button 
-                  onClick={handleCodeRecommendation}
-                  className="bg-purple-600 hover:bg-purple-700"
-                >
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  AI 코드 추천
-                </Button>
-              )}
-              <Button variant="outline" size="sm">
-                <Settings className="w-4 h-4" />
-              </Button>
-            </div>
           </div>
-        </CardHeader>
-      </Card>
 
-      {/* 회의 컨트롤 */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-center gap-4">
-            <Button
-              onClick={onToggleMeeting}
-              size="lg"
-              className={isActive ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"}
-            >
-              {isActive ? (
-                <>
-                  <Square className="w-5 h-5 mr-2" />
-                  회의 종료
-                </>
-              ) : (
-                <>
-                  <Play className="w-5 h-5 mr-2" />
-                  회의 시작
-                </>
-              )}
-            </Button>
+          {/* 💡 음성 회의용 참가자 그리드 */}
+          <div className="w-full h-full flex flex-col items-center justify-center">
+            {isActive ? (
+                <div className="flex-1 w-full grid grid-cols-2 md:grid-cols-3 gap-8 p-8 items-center justify-center">
+                    {mockParticipants.map(p => <ParticipantCard key={p.id} participant={p} />)}
+                </div>
+            ) : (
+                <div className="text-center text-slate-500">
+                    <h3 className="text-2xl font-bold">회의가 아직 시작되지 않았습니다.</h3>
+                    <p className="mt-2">상위 컴포넌트의 '회의 시작' 버튼을 눌러주세요.</p>
+                </div>
+            )}
 
+            {/* 하단 컨트롤 바 */}
             {isActive && (
-              <>
-                <Button
-                  onClick={() => setIsMuted(!isMuted)}
-                  variant={isMuted ? "destructive" : "outline"}
-                  size="lg"
-                >
-                  {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                </Button>
-
-                <Button
-                  onClick={() => setIsVideoOff(!isVideoOff)}
-                  variant={isVideoOff ? "destructive" : "outline"}
-                  size="lg"
-                >
-                  {isVideoOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
-                </Button>
-
-                <Button
-                  onClick={onToggleRecording}
-                  variant={isRecording ? "destructive" : "outline"}
-                  size="lg"
-                >
-                  {isRecording ? (
-                    <>
-                      <Square className="w-4 h-4 mr-2" />
-                      녹음 중지
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-4 h-4 bg-red-500 rounded-full mr-2"></div>
-                      녹음 시작
-                    </>
-                  )}
-                </Button>
-
-                <Button variant="destructive" size="lg">
-                  <Phone className="w-5 h-5" />
-                </Button>
-              </>
+                <div className="z-10 flex justify-center pt-4">
+                    <div className="flex items-start gap-6 p-4 bg-white/80 backdrop-blur-md border border-slate-200/80 rounded-2xl shadow-lg">
+                        <ControlButton Icon={isMuted ? MicOff : Mic} label={isMuted ? "음소거 해제" : "음소거"} onClick={() => setIsMuted(!isMuted)} />
+                        {/* 비디오, 화면공유 버튼 제거 */}
+                        <ControlButton Icon={Users} label="참가자" onClick={() => setIsParticipantsOpen(!isParticipantsOpen)} />
+                        {autoSummaryGenerated && (
+                            <ControlButton Icon={Sparkles} label="AI 추천" onClick={handleCodeRecommendation} />
+                        )}
+                        <div className="w-px h-20 bg-slate-200 mx-2"></div>
+                        <ControlButton Icon={Phone} label="나가기" variant="danger" />
+                    </div>
+                </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </main>
 
-      {/* 회의 공간 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 비디오 영역 */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="aspect-video bg-gray-900 rounded-lg flex items-center justify-center text-white">
-              {isActive ? (
-                <div className="text-center">
-                  <Video className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p>비디오 화면</p>
-                  {isVideoOff && <p className="text-sm opacity-75 mt-2">카메라 꺼짐</p>}
-                </div>
-              ) : (
-                <div className="text-center text-gray-500">
-                  <p>회의를 시작하면 비디오가 활성화됩니다</p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 참석자 목록 */}
-        <Card>
-          <CardContent className="p-6">
-            <ParticipantsList participants={isActive ? mockParticipants : []} />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 스크린 공유 영역 */}
-      {isActive && (
-        <Card>
-          <CardHeader>
-            <CardTitle>화면 공유</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="aspect-video bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
-              <div className="text-center text-gray-500">
-                <p>공유된 화면이 여기에 표시됩니다</p>
-                <Button variant="outline" className="mt-2">
-                  화면 공유 시작
-                </Button>
+        {/* 참가자 목록 사이드바 */}
+        <aside className={`
+          flex-shrink-0 bg-white border-l border-slate-200
+          transition-all duration-300 ease-in-out
+          ${isParticipantsOpen && isActive ? 'w-80 p-4' : 'w-0 p-0'}
+        `}>
+          {isParticipantsOpen && isActive && (
+            <div className="h-full flex flex-col">
+              <h3 className="text-lg font-semibold mb-4 text-slate-800 shrink-0">참석자 ({mockParticipants.length})</h3>
+              <div className="flex-1 overflow-y-auto min-h-0">
+                <ParticipantsList participants={mockParticipants} />
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </aside>
+      </div>
     </div>
   );
 }
