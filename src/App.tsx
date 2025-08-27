@@ -15,7 +15,7 @@ function App() {
       <Route element={<Layout />}>
         <Route path="login" element={<Login />} />
         <Route path="home" element={<Home />} />
-        <Route path="mindmap/:id" element={<Mindmap />} />
+        <Route path="mindmap" element={<Mindmap />} />
         <Route path="code" element={<Code />} />
         <Route path="meeting" element={<Meeting />} />
       </Route>
