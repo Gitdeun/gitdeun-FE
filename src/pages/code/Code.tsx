@@ -3,7 +3,7 @@ import { useImmer } from 'use-immer';
 import { FileList } from '../../components/code/FileList.tsx';
 import { CodeViewer } from '../../components/code/CodeViewer.tsx';
 import { CommentSection } from '../../components/code/CommentSection.tsx';
-import type { Comment, FileSystemItem } from '../../types.ts';
+import type { Comment, FileItem, EmojiCounts } from '../../types.ts';
 
 // Mock data
 const mockFiles = [
@@ -55,13 +55,11 @@ const mockComments: Comment[] = [
   { id: 'c3', author: '이백엔드', content: 'useState 사용법이 정확하네요. 메뉴 토글 기능도 구현해보면 좋을 것 같아요.', timestamp: new Date(Date.now() - 900000), likes: 2, isLiked: false, lineNumber: 6 }
 ];
 
-
-
 const REPORT_THRESHOLD = 5;
 const CURRENT_USER = '현재사용자';
 
-// Helper function to find a file/folder by ID (placed outside the component)
-const findItemById = (items: FileSystemItem[], id: string): FileSystemItem | undefined => {
+// Helpers
+const findItemById = (items: FileItem[], id: string): FileItem | undefined => {
   for (const item of items) {
     if (item.id === id) return item;
     if (item.type === 'folder' && item.children) {
@@ -71,8 +69,6 @@ const findItemById = (items: FileSystemItem[], id: string): FileSystemItem | und
   }
   return undefined;
 };
-
-// Helper function to find a comment by ID
 const findCommentById = (comments: Comment[], id: string): Comment | undefined => {
   for (const comment of comments) {
     if (comment.id === id) return comment;
@@ -86,22 +82,27 @@ const findCommentById = (comments: Comment[], id: string): Comment | undefined =
 
 export default function App() {
   const [files, setFiles] = useImmer(mockFiles);
-  const [selectedFile, setSelectedFile] = useState<string | null>('3'); // Default selection for demo
+  const [selectedFile, setSelectedFile] = useState<string | null>('3');
   const [comments, setComments] = useImmer<Comment[]>(mockComments);
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
+
+  // ✅ 파일별 이모지 합계(사이드바 상위 댓글 기준) 상태
+  const [emojiCountsByFileId, setEmojiCountsByFileId] = useState<Record<string, EmojiCounts>>({});
 
   const currentFile = useMemo(() => {
     if (!selectedFile) return null;
     const fileData = findItemById(files, selectedFile);
     if (!fileData || fileData.type !== 'file') return null;
 
-    // Enhance file data with dynamic content or props
     return {
       ...fileData,
-      content: fileData.id === '3' ? mockCodeContent.map(line => ({
-        ...line,
-        emojis: line.number === 11 ? [{ emoji: '⭐', count: 2, users: ['김개발', '박프론트'] }] : undefined
-      })) : undefined,
+      content: fileData.id === '3'
+        ? mockCodeContent.map(line => ({
+            ...line,
+            // 데모: 11번 라인에 전역(라인) 이모지 뱃지 예시
+            emojis: line.number === 11 ? [{ emoji: '⭐', count: 2, users: ['김개발', '박프론트'] }] : undefined
+          }))
+        : undefined,
       branch: 'main'
     };
   }, [selectedFile, files]);
@@ -115,7 +116,7 @@ export default function App() {
     });
   };
 
-  const handleFileSelect = (file: FileSystemItem) => {
+  const handleFileSelect = (file: FileItem) => {
     if (file.type === 'file') {
       setSelectedFile(file.id);
       setSelectedLine(null);
@@ -141,9 +142,7 @@ export default function App() {
     setComments(draft => {
       const parentComment = findCommentById(draft, parentId);
       if (parentComment) {
-        if (!parentComment.replies) {
-          parentComment.replies = [];
-        }
+        if (!parentComment.replies) parentComment.replies = [];
         parentComment.replies.push({
           id: `r${Date.now()}`,
           author: CURRENT_USER,
@@ -159,44 +158,37 @@ export default function App() {
   const handleEdit = (commentId: string, newContent: string) => {
     setComments(draft => {
       const comment = findCommentById(draft, commentId);
-      if (comment) {
-        comment.content = newContent;
-      }
+      if (comment) comment.content = newContent;
     });
   };
 
   const handleDelete = (commentId: string) => {
-    const deleteComment = (commentList: Comment[]): Comment[] => {
-      return commentList.filter(comment => {
-        if (comment.id === commentId) return false;
-        if (comment.replies) {
-          comment.replies = deleteComment(comment.replies);
-        }
+    const deleteComment = (list: Comment[]): Comment[] =>
+      list.filter(c => {
+        if (c.id === commentId) return false;
+        if (c.replies) c.replies = deleteComment(c.replies);
         return true;
       });
-    };
     setComments(deleteComment);
   };
 
   const handleLike = (commentId: string) => {
     setComments(draft => {
-      const comment = findCommentById(draft, commentId);
-      if (comment) {
-        const newIsLiked = !comment.isLiked;
-        comment.isLiked = newIsLiked;
-        comment.likes = (comment.likes || 0) + (newIsLiked ? 1 : -1);
-      }
+      const c = findCommentById(draft, commentId);
+      if (!c) return;
+      const toggled = !c.isLiked;
+      c.isLiked = toggled;
+      c.likes = (c.likes || 0) + (toggled ? 1 : -1);
     });
   };
 
   const handleReport = (commentId: string) => {
     setComments(draft => {
-      const comment = findCommentById(draft, commentId);
-      if (comment) {
-        comment.reportCount = (comment.reportCount || 0) + 1;
-        if (comment.reportCount >= REPORT_THRESHOLD) {
-          console.log(`Comment ${commentId} has been reported ${REPORT_THRESHOLD}+ times and sent to admin`);
-        }
+      const c = findCommentById(draft, commentId);
+      if (!c) return;
+      c.reportCount = (c.reportCount || 0) + 1;
+      if (c.reportCount >= REPORT_THRESHOLD) {
+        console.log(`Comment ${commentId} has been reported ${REPORT_THRESHOLD}+ times and sent to admin`);
       }
     });
   };
@@ -213,6 +205,11 @@ export default function App() {
     }
   };
 
+  // ✅ CodeViewer에서 계산한 파일별 이모지 집계를 받아 파일 리스트에 전달
+  const handleFileEmojiCountsChange = (fileId: string, counts: EmojiCounts) => {
+    setEmojiCountsByFileId(prev => ({ ...prev, [fileId]: counts }));
+  };
+
   return (
     <div className="h-screen flex flex-col bg-blue-50/20">
       <div className="flex-1 flex overflow-hidden">
@@ -221,13 +218,16 @@ export default function App() {
           selectedFile={selectedFile}
           onFileSelect={handleFileSelect}
           onToggleFolder={handleToggleFolder}
+          /* ⬇️ 파일 옆 이모지 뱃지에 쓰임 */
+          emojiCountsByFileId={emojiCountsByFileId}
         />
-        <div className="flex-1 flex flex-col">
-          <div className="flex-1 flex">
+        <div className="flex-1 min-h-0 flex flex-col">
+          <div className="flex-1 min-h-0 flex">
             <CodeViewer
               file={currentFile}
               onAddComment={handleCodeLineComment}
               onAddEmoji={handleAddEmoji}
+              onFileEmojiCountsChange={handleFileEmojiCountsChange}
             />
           </div>
           <div className="h-80 overflow-y-auto">

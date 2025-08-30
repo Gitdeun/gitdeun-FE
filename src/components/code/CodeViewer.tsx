@@ -1,189 +1,188 @@
-import  { useState } from 'react';
-import { GitBranch, MessageSquare, Video } from 'lucide-react';
-import { Button } from '../ui/button.tsx';
-import { Badge } from '../ui/badge.tsx';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu.tsx';
+// components/code/CodeViewer.tsx
+"use client";
 
-interface CodeLine {
-  number: number;
-  content: string;
-  type?: 'added' | 'removed' | 'normal';
-  comments?: Comment[];
-  emojis?: { emoji: string; count: number; users: string[] }[];
-}
+import { useEffect, useMemo, useState } from "react";
+import { MessageSquare } from "lucide-react";
+import {
+  cn,
+  EmojiType,
+  EmojiTypeDetails,
+  type CodeViewerProps,
+  type CodeLine,
+  type CodeComment,
+} from "../../types.ts";
+import { CommentSidebar, type SidebarThread } from "./CommentSidebar";
 
-interface CodeViewerProps {
-  file: {
-    id: string;
-    name: string;
-    path: string;
-    isDeleted?: boolean;
-    content?: CodeLine[];
-    branch?: string;
-  } | null;
-  onAddComment: (lineNumber: number, content: string) => void;
-  onAddEmoji: (lineNumber: number, emoji: string) => void;
-}
+/* -------- 안전 하이라이트 (/<span 이슈 방지) -------- */
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+   .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
-export function CodeViewer({ file, onAddComment, onAddEmoji }: CodeViewerProps) {
+const syntaxHighlight = (text: string) => {
+  const t = escapeHtml(text);
+  return t
+    .replace(/\b(function|const|let|var|if|else|for|while|return|class|interface|import|export|from|async|await)\b/g,'<span class="keyword">$1</span>')
+    .replace(/&quot;([^&]*)&quot;/g,'<span class="string">&quot;$1&quot;</span>')
+    .replace(/&#39;([^&]*)&#39;/g,'<span class="string">&#39;$1&#39;</span>')
+    .replace(/\/\/.*$/gm,(m)=>`<span class="comment">${m}</span>`)
+    .replace(/\b(\d+)\b/g,'<span class="number">$1</span>')
+    .replace(/\b([a-zA-Z_]\w*)\s*\(/g,'<span class="function">$1</span>(');
+};
+
+export function CodeViewer(props: CodeViewerProps) {
+  // onAddEmoji는 사용하지 않으므로 구조분해하지 않음(ESLint 회피)
+  const { file, onFileEmojiCountsChange } = props;
+
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
-  const [hoveredLine, setHoveredLine] = useState<number | null>(null);
 
-  const syntaxHighlight = (text: string) => {
-    return text
-      .replace(/\b(function|const|let|var|if|else|for|while|return|class|interface|import|export|from|async|await)\b/g, '<span class="keyword">$1</span>')
-      .replace(/"([^"]*)"/g, '<span class="string">"$1"</span>')
-      .replace(/'([^']*)'/g, '<span class="string">\'$1\'</span>')
-      .replace(/\/\/.*$/gm, '<span class="comment">$&</span>')
-      .replace(/\b(\d+)\b/g, '<span class="number">$1</span>')
-      .replace(/\b([a-zA-Z_]\w*)\s*\(/g, '<span class="function">$1</span>(');
-  };
+  // 전역(부모 제공) 라인
+  const [lines, setLines] = useState<CodeLine[]>(file?.content ?? []);
+  useEffect(() => setLines(file?.content ?? []), [file]);
+
+  // 라인별 사이드바 전용 스레드
+  const [sidebarThreads, setSidebarThreads] = useState<Record<number, SidebarThread[]>>({});
+
+  // 현재 선택 라인
+  const activeBase = lines.find((l) => l.number === selectedLine);
+
+  // 사이드바 보기(전역 + 사이드바 합침)
+  const activeThreads = useMemo<SidebarThread[] | undefined>(() => {
+    if (!activeBase) return undefined;
+    const global = (activeBase.comments ?? []) as SidebarThread[];
+    const local = sidebarThreads[activeBase.number] ?? [];
+    return [...global, ...local];
+  }, [activeBase, sidebarThreads]);
+
+  // 파일 헤더 옆 이모지(표시용 집계는 유지)
+  const fileEmojiCounts = useMemo<Record<string, number>>(() => {
+    const counts: Record<string, number> = {};
+    Object.values(sidebarThreads).forEach((list) =>
+      list.forEach((t) => {
+        const e = EmojiTypeDetails[t.type].emoji;
+        counts[e] = (counts[e] ?? 0) + 1;
+      }),
+    );
+    return counts;
+  }, [sidebarThreads]);
+
+  // 부모로 타입 기준 집계 전파 (파일 리스트 옆 뱃지 용도라면 유지)
+  useEffect(() => {
+    if (!file?.id || !onFileEmojiCountsChange) return;
+    const byType: Partial<Record<EmojiType, number>> = {};
+    Object.values(sidebarThreads).forEach((list) =>
+      list.forEach((t) => {
+        byType[t.type] = (byType[t.type] ?? 0) + 1;
+      }),
+    );
+    onFileEmojiCountsChange(file.id, byType);
+  }, [file?.id, sidebarThreads, onFileEmojiCountsChange]);
 
   if (!file) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-blue-50/20">
+      <div className="flex-1 min-h-0 flex items-center justify-center bg-gray-50">
         <div className="text-center text-gray-500">
-          <MessageSquare className="w-12 h-12 mx-auto mb-4 text-blue-300" />
+          <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-300" />
           <p>파일을 선택해주세요</p>
         </div>
       </div>
     );
   }
+  if (file.isDeleted) return <div className="p-8 text-center text-gray-500">삭제된 파일입니다.</div>;
 
-  if (file.isDeleted) {
-    return (
-      <div className="flex-1 flex flex-col">
-        <div className="p-4 border-b border-blue-200 bg-blue-100/50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h3 className="text-blue-900">{file.name}</h3>
-              <Badge variant="destructive">삭제됨</Badge>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" className="text-blue-600 border-blue-300">
-                히스토리 보기
-              </Button>
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex-1 flex items-center justify-center bg-blue-50/20">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <MessageSquare className="w-8 h-8 text-red-500" />
-            </div>
-            <h3 className="text-red-700 mb-2">파일이 삭제되었습니다</h3>
-            <p className="text-gray-600 mb-4">이 파일은 더 이상 사용할 수 없습니다.</p>
-            <Button variant="outline" className="text-blue-600">
-              히스토리에서 이전 버전 보기
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  /* ---- 사이드바 전용: 상위 댓글/답글 추가 (전역 영향 X) ---- */
+ const addSidebarTop = (lineNo: number, content: string, type: EmojiType) => {
+  const newComment = {
+    id: `sb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    user: "나",
+    content,        // ← 여기에 실제 댓글 텍스트가 들어감
+    type,           // ← 타입은 별도 필드
+  };
+  setSidebarThreads(prev => ({
+    ...prev,
+    [lineNo]: [...(prev[lineNo] ?? []), newComment],
+  }));
+};
+
+  const addSidebarReply = (lineNo: number, parentId: string, content: string) => {
+    const reply: CodeComment = {
+      id: `sb_r_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      user: "나",
+      content,
+      type: EmojiType.QUESTION,
+    };
+    setSidebarThreads((prev) => {
+      const list = [...(prev[lineNo] ?? [])];
+      const idx = list.findIndex((t) => t.id === parentId);
+      if (idx >= 0) list[idx] = { ...list[idx], replies: [...(list[idx].replies ?? []), reply] };
+      return { ...prev, [lineNo]: list };
+    });
+  };
 
   return (
-    <div className="flex-1 flex flex-col bg-white">
-      {/* Header */}
-      <div className="p-4 border-b border-blue-200 bg-blue-50/50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h3 className="text-blue-900">{file.name}</h3>
-            <div className="flex items-center gap-1 text-sm text-blue-600">
-              <GitBranch className="w-4 h-4" />
-              <span>{file.branch || 'main'}</span>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="text-gray-700 border-gray-300">
-              <MessageSquare className="w-4 h-4 mr-2" />
-              의견 나누기
-            </Button>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
-              <Video className="w-4 h-4 mr-2" />
-              회의
-            </Button>
+    <div className="flex-1 min-h-0 flex flex-col bg-white overflow-hidden">
+      {/* 헤더(파일명만) */}
+      <div className="shrink-0 min-h-0 p-4 border-b border-gray-200 bg-gray-50/50">
+        <div className="flex min-h-0 items-center justify-between">
+          <h3 className="text-gray-800 font-semibold">{file.name}</h3>
+          {/* 파일 헤더 옆 이모지 배지는 유지하려면 아래 블록을 남겨두세요.
+              필요 없으면 이 div를 삭제하세요. */}
+          <div className="flex items-center gap-1">
+            {Object.entries(fileEmojiCounts).map(([emoji, count]) => (
+              <span
+                key={emoji}
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-sm bg-blue-50 text-blue-700 border border-blue-100"
+                title="사이드바 상위 댓글 지표"
+              >
+                <span className="mr-1">{emoji}</span>
+                {count}
+              </span>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Code Content */}
-      <div className="flex-1 overflow-auto">
-        <div className="font-mono text-sm">
-          {file.content?.map((line) => (
-            <div
-              key={line.number}
-              className={`flex group relative code-line ${
-                selectedLine === line.number ? 'bg-blue-100' : ''
-              } ${hoveredLine === line.number ? 'bg-blue-50' : ''}`}
-              onMouseEnter={() => setHoveredLine(line.number)}
-              onMouseLeave={() => setHoveredLine(null)}
-              onClick={() => setSelectedLine(line.number)}
-            >
-              <div className="w-12 text-right pr-4 py-1 text-gray-400 bg-blue-50/30 border-r border-blue-200 select-none">
-                {line.number}
-              </div>
-              
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* 코드 영역: 클릭 시 사이드바만 열림 (라인 옆 이모지 전부 제거) */}
+        <div className="flex-1 min-h-0 min-w-0 overflow-y-auto">
+          <div className="font-mono text-sm">
+            {lines?.map((line) => (
               <div
-                className="flex-1 px-4 py-1"
-                dangerouslySetInnerHTML={{ __html: syntaxHighlight(line.content) }}
-              />
-              
-              {/* Action buttons on hover */}
-              {hoveredLine === line.number && (
-                <div className="absolute right-2 top-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                        😊
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      {['⭐', '❤️', '👍', '🎉', '🔥'].map(emoji => (
-                        <DropdownMenuItem 
-                          key={emoji}
-                          onClick={() => onAddEmoji(line.number, emoji)}
-                        >
-                          {emoji}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-6 w-6 p-0"
-                    onClick={() => onAddComment(line.number, '')}
-                  >
-                    <MessageSquare className="w-3 h-3" />
-                  </Button>
+                key={line.number}
+                className={cn("flex group relative code-line", {
+                  "bg-blue-50": selectedLine === line.number,
+                  "hover:bg-gray-50": selectedLine !== line.number,
+                })}
+                onClick={() => setSelectedLine(line.number)}
+              >
+                {/* 라인 번호만 표시 (댓글 이모지 뱃지 제거) */}
+                <div className="w-16 text-right pr-4 py-1 text-gray-400 bg-gray-50/30 border-r border-gray-200 select-none">
+                  {line.number}
                 </div>
-              )}
 
-              {/* Emojis */}
-              {line.emojis && line.emojis.length > 0 && (
-                <div className="absolute right-16 top-1 flex gap-1">
-                  {line.emojis.slice(0, 3).map((emojiData, index) => (
-                    <div 
-                      key={index}
-                      className="bg-blue-100 border border-blue-200 rounded px-1 text-xs flex items-center gap-1"
-                    >
-                      <span>{emojiData.emoji}</span>
-                      <span className="text-blue-600">{emojiData.count}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )) || (
-            <div className="p-8 text-center text-gray-500">
-              <p>파일 내용을 불러올 수 없습니다.</p>
-            </div>
-          )}
+                {/* 코드 */}
+                <div
+                  className="flex-1 px-4 py-1"
+                  dangerouslySetInnerHTML={{ __html: syntaxHighlight(line.content) }}
+                />
+              </div>
+            )) || (
+              <div className="p-8 text-center text-gray-500">
+                <p>파일 내용을 불러올 수 없습니다.</p>
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* 우측 사이드바: 텍스트 댓글만 */}
+        {activeBase && (
+          <CommentSidebar
+            lineNumber={activeBase.number}
+            threads={activeThreads ?? []}
+            onClose={() => setSelectedLine(null)}
+            onAddTop={(type, content) => addSidebarTop(activeBase.number, content, type)}
+            onAddReply={(parentId, content) => addSidebarReply(activeBase.number, parentId, content)}
+          />
+        )}
       </div>
     </div>
   );
