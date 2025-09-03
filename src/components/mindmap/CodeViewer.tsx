@@ -114,7 +114,7 @@ export function CodeViewer({
           {/* Comments list */}
           <ScrollArea className="max-h-64">
             <div className="space-y-3">
-              {comments.map((comment) => ( // TypeScript가 여기서 'comment'를 'mindmapComment' 타입으로 추론합니다.
+              {comments.map((comment) => (
                 <div key={comment.id} className="bg-muted/50 rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-medium">{comment.author}</span>

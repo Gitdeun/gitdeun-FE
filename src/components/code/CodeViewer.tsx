@@ -54,15 +54,12 @@ export function CodeViewer(props: CodeViewerProps) {
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
   const [lines, setLines] = useState<CodeLine[]>(file?.content ?? []);
 
-  // ✅ 파일별 스레드 캐시 (컴포넌트 내부에서 파일간 상태 유지)
   const perFileThreadsRef = useRef<Record<string, Record<number, SidebarThread[]>>>({});
 
-  // 현재 파일의 라인별 스레드
   const [sidebarThreads, setSidebarThreads] = useState<Record<number, SidebarThread[]>>({});
 
   useEffect(() => setLines(file?.content ?? []), [file]);
 
-  // ✅ 파일이 바뀌면: 캐시에서 불러오고, 부모에 집계 반영
   useEffect(() => {
     if (!file?.id) return;
     const saved = perFileThreadsRef.current[file.id] ?? {};
