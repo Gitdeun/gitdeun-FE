@@ -1,9 +1,31 @@
-// src/pages/MindmapListView.tsx
+"use client";
 
-import { useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import { useLocation, useNavigate } from "react-router-dom";
 import MindmapDetailView, { type Mindmap } from './MindmapDetailView.tsx';
+import { TechStackModal } from '../../components/modal/TechStackModal';
 
-// --- 아이콘 컴포넌트들 ---
+// --- 데이터 정의 (예시) ---
+const fakeMindmapData = {
+  node: "혜택온(Hyetaekon) 애플리케이션",
+  related_files: ["HyetaekonApplication.java"],
+  children: [
+    { node: "공공 복지 서비스", related_files: ["PublicServiceController.java", "PublicServiceHandler.java"], children: [
+      { node: "공공 데이터 동기화 (백엔드)", related_files: ["PublicServiceDataController.java"], children: [] },
+      { node: "서비스 조회 및 필터링", related_files: ["PublicServiceController.java"], children: [] }
+    ]},
+    { node: "커뮤니티", related_files: [], children: [
+      { node: "게시글 관리", related_files: ["PostController.java"], children: [] },
+      { node: "답변 관리 (Q&A)", related_files: ["AnswerController.java"], children: [] }
+    ]},
+    { node: "사용자 관리", related_files: ["UserController.java"], children: [
+      { node: "인증 (JWT)", related_files: ["AuthController.java"], children: [] }
+    ]}
+  ]
+};
+
+
+// 💡 컴포넌트 분리: 아이콘과 카드 컴포넌트를 Map 컴포넌트 밖으로 이동
 const ChevronRightIcon = ({ className }: { className?: string }) => (
   <svg className={className || "w-6 h-6 text-gray-400"} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
@@ -17,30 +39,32 @@ const PinIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-// 💡 상세 뷰에서 사용할 마인드맵 데이터
-const fakeMindmapData = {
-  "node": "혜택온(Hyetaekon) 애플리케이션",
-  "related_files": ["HyetaekonApplication.java"],
-  "children": [
-    { "node": "공공 복지 서비스", "related_files": ["PublicServiceController.java", "PublicServiceHandler.java"], "children": [
-      { "node": "공공 데이터 동기화 (백엔드)", "related_files": ["PublicServiceDataController.java"], "children": [] },
-      { "node": "서비스 조회 및 필터링", "related_files": ["PublicServiceController.java"], "children": [] }
-    ]},
-    { "node": "커뮤니티", "related_files": [], "children": [
-      { "node": "게시글 관리", "related_files": ["PostController.java"], "children": [] },
-      { "node": "답변 관리 (Q&A)", "related_files": ["AnswerController.java"], "children": [] }
-    ]},
-    { "node": "사용자 관리", "related_files": ["UserController.java"], "children": [
-      { "node": "인증 (JWT)", "related_files": ["AuthController.java"], "children": [] }
-    ]}
-  ]
-};
+const MindmapCard = ({ mindmap, onClick }: { mindmap: Mindmap; onClick: () => void }) => (
+    <div onClick={onClick} className="flex flex-col justify-between p-6 rounded-2xl bg-white transition-all duration-300 cursor-pointer border border-slate-200/80 shadow-md hover:shadow-xl hover:-translate-y-1">
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <span className={`w-3 h-3 rounded-full ${mindmap.type === '개발용' ? 'bg-blue-400' : 'bg-indigo-400'}`}></span>
+          <span className="text-sm font-semibold text-gray-600">{mindmap.type}</span>
+        </div>
+        <p className="text-sm text-gray-400 truncate mb-1">{mindmap.link}</p>
+        <h3 className="text-2xl font-bold text-gray-800 my-1 truncate">{mindmap.title}</h3>
+      </div>
+      <div className="flex justify-between items-center mt-4">
+        <p className="text-sm text-orange-500 font-medium">최근 업데이트 {mindmap.updated}</p>
+        <div className="flex items-center gap-2">
+          {mindmap.pinned && <PinIcon className="w-5 h-5 text-gray-700" />}
+          <ChevronRightIcon className="w-5 h-5 text-gray-400" />
+        </div>
+      </div>
+    </div>
+);
 
+
+// --- 메인 컴포넌트 ---
 const Map: React.FC = () => {
   const [githubLink, setGithubLink] = useState<string>('');
   const [isDevMode, setIsDevMode] = useState<boolean>(true);
   const [mindmaps, setMindmaps] = useState<Mindmap[]>([
-    // 💡 각 mindmap 객체에 data 속성을 추가
     { id: 2, link: 'https://github.com/EWSNproject/be.git', title: '혜택온 백엔드', updated: '2025.07.13', pinned: true, type: '개발용', data: fakeMindmapData },
     { id: 3, link: 'https://github.com/porjecy123/fe.git', title: '확인용1', updated: '2025.07.13', pinned: true, type: '확인용', data: { node: "확인용1 루트", related_files: ["index.js"], children: [] } },
     { id: 1, link: 'https://github.com/EWSNproject/fe.git', title: '혜택온 프론트엔드', updated: '2025.07.13', eta: '5분예정', type: '개발용', data: { node: "프론트엔드 루트", related_files: ["App.tsx"], children: [] } },
@@ -49,6 +73,16 @@ const Map: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [prompt, setPrompt] = useState<string>('');
   const [selectedMindmap, setSelectedMindmap] = useState<Mindmap | null>(null);
+
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [openTechModal, setOpenTechModal] = useState<boolean>(Boolean(location.state?.showTechStackModal));
+
+  useEffect(() => {
+    if (location.state?.showTechStackModal) {
+      navigate(".", { replace: true, state: {} });
+    }
+  }, [location.state, navigate]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,7 +93,7 @@ const Map: React.FC = () => {
     setError('');
 
     const newMindmap: Mindmap = {
-      id: mindmaps.length + 1,
+      id: Date.now(),
       link: githubLink,
       title: prompt || `새 마인드맵 ${mindmaps.length + 1}`,
       updated: new Date().toISOString().slice(0, 10).replace(/-/g, '.'),
@@ -77,32 +111,12 @@ const Map: React.FC = () => {
     setSelectedMindmap(mindmap);
   };
 
-  const pinnedMindmaps = mindmaps.filter(m => m.pinned);
-  const otherMindmaps = mindmaps.filter(m => !m.pinned);
+  const pinnedMindmaps = useMemo(() => mindmaps.filter(m => m.pinned), [mindmaps]);
+  const otherMindmaps = useMemo(() => mindmaps.filter(m => !m.pinned), [mindmaps]);
 
   if (selectedMindmap) {
     return <MindmapDetailView mindmap={selectedMindmap} onBack={() => setSelectedMindmap(null)} />;
   }
-
-  const MindmapCard = ({ mindmap }: { mindmap: Mindmap }) => (
-    <div onClick={() => handleMindmapClick(mindmap)} className="flex flex-col justify-between p-6 rounded-2xl bg-white transition-all duration-300 cursor-pointer border border-slate-200/80 shadow-md hover:shadow-xl hover:-translate-y-1">
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <span className={`w-3 h-3 rounded-full ${mindmap.type === '개발용' ? 'bg-blue-400' : 'bg-indigo-400'}`}></span>
-          <span className="text-sm font-semibold text-gray-600">{mindmap.type}</span>
-        </div>
-        <p className="text-sm text-gray-400 truncate mb-1">{mindmap.link}</p>
-        <h3 className="text-2xl font-bold text-gray-800 my-1 truncate">{mindmap.title}</h3>
-      </div>
-      <div className="flex justify-between items-center mt-4">
-        <p className="text-sm text-orange-500 font-medium">최근 업데이트 {mindmap.updated}</p>
-        <div className="flex items-center gap-2">
-          {mindmap.pinned && <PinIcon className="w-5 h-5 text-gray-700" />}
-          <ChevronRightIcon className="w-5 h-5 text-gray-400" />
-        </div>
-      </div>
-    </div>
-  );
 
   return (
     <div className="font-sans">
@@ -159,18 +173,20 @@ const Map: React.FC = () => {
             <section className="w-full mb-12">
               <h2 className="text-xl font-bold text-gray-800 mb-4 px-2">Pinned</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {pinnedMindmaps.map(mindmap => <MindmapCard key={mindmap.id} mindmap={mindmap} />)}
+                {pinnedMindmaps.map(mindmap => <MindmapCard key={mindmap.id} mindmap={mindmap} onClick={() => handleMindmapClick(mindmap)} />)}
               </div>
             </section>
           )}
           <section className="w-full">
             <h2 className="text-xl font-bold text-gray-800 mb-4 px-2">mind map</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {otherMindmaps.map(mindmap => <MindmapCard key={mindmap.id} mindmap={mindmap} />)}
+              {otherMindmaps.map(mindmap => <MindmapCard key={mindmap.id} mindmap={mindmap} onClick={() => handleMindmapClick(mindmap)} />)}
             </div>
           </section>
         </div>
       </div>
+
+      <TechStackModal isOpen={openTechModal} onClose={() => setOpenTechModal(false)} />
     </div>
   );
 };

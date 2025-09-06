@@ -1,189 +1,197 @@
-import  { useState } from 'react';
-import { GitBranch, MessageSquare, Video } from 'lucide-react';
-import { Button } from '../ui/button.tsx';
-import { Badge } from '../ui/badge.tsx';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu.tsx';
+"use client";
 
-interface CodeLine {
-  number: number;
-  content: string;
-  type?: 'added' | 'removed' | 'normal';
-  comments?: Comment[];
-  emojis?: { emoji: string; count: number; users: string[] }[];
-}
+import { useEffect, useMemo, useRef, useState } from "react";
+import { MessageSquare } from "lucide-react";
+import {
+  cn,
+  EmojiType,
+  EmojiTypeDetails,
+  type CodeViewerProps,
+  type CodeLine,
+  type CodeComment,
+} from "../../types.ts";
+import { CommentSidebar, type SidebarThread } from "./CommentSidebar";
 
-interface CodeViewerProps {
-  file: {
-    id: string;
-    name: string;
-    path: string;
-    isDeleted?: boolean;
-    content?: CodeLine[];
-    branch?: string;
-  } | null;
-  onAddComment: (lineNumber: number, content: string) => void;
-  onAddEmoji: (lineNumber: number, emoji: string) => void;
-}
 
-export function CodeViewer({ file, onAddComment, onAddEmoji }: CodeViewerProps) {
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+   .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+const syntaxHighlight = (text: string) => {
+  const t = escapeHtml(text);
+  return t
+    .replace(/\b(function|const|let|var|if|else|for|while|return|class|interface|import|export|from|async|await)\b/g,'<span class="keyword">$1</span>')
+    .replace(/&quot;([^&]*)&quot;/g,'<span class="string">&quot;$1&quot;</span>')
+    .replace(/&#39;([^&]*)&#39;/g,'<span class="string">&#39;$1&#39;</span>')
+    .replace(/\/\/.*$/gm,(m)=>`<span class="comment">${m}</span>`)
+    .replace(/\b(\d+)\b/g,'<span class="number">$1</span>')
+    .replace(/\b([a-zA-Z_]\w*)\s*\(/g,'<span class="function">$1</span>(');
+};
+
+/** 타입별 집계 */
+const byTypeCounts = (threadsByLine: Record<number, SidebarThread[]>) => {
+  const out: Partial<Record<EmojiType, number>> = {};
+  Object.values(threadsByLine).forEach(list =>
+    list.forEach(t => { out[t.type] = (out[t.type] ?? 0) + 1; })
+  );
+  return out;
+};
+/** 헤더 이모지(문자) 집계 */
+const headerEmojiCounts = (threadsByLine: Record<number, SidebarThread[]>) => {
+  const out: Record<string, number> = {};
+  Object.values(threadsByLine).forEach(list =>
+    list.forEach(t => {
+      const e = EmojiTypeDetails[t.type].emoji;
+      out[e] = (out[e] ?? 0) + 1;
+    })
+  );
+  return out;
+};
+
+export function CodeViewer(props: CodeViewerProps) {
+  const { file, onFileEmojiCountsChange } = props;
+
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
-  const [hoveredLine, setHoveredLine] = useState<number | null>(null);
+  const [lines, setLines] = useState<CodeLine[]>(file?.content ?? []);
 
-  const syntaxHighlight = (text: string) => {
-    return text
-      .replace(/\b(function|const|let|var|if|else|for|while|return|class|interface|import|export|from|async|await)\b/g, '<span class="keyword">$1</span>')
-      .replace(/"([^"]*)"/g, '<span class="string">"$1"</span>')
-      .replace(/'([^']*)'/g, '<span class="string">\'$1\'</span>')
-      .replace(/\/\/.*$/gm, '<span class="comment">$&</span>')
-      .replace(/\b(\d+)\b/g, '<span class="number">$1</span>')
-      .replace(/\b([a-zA-Z_]\w*)\s*\(/g, '<span class="function">$1</span>(');
-  };
+  const perFileThreadsRef = useRef<Record<string, Record<number, SidebarThread[]>>>({});
+
+  const [sidebarThreads, setSidebarThreads] = useState<Record<number, SidebarThread[]>>({});
+
+  useEffect(() => setLines(file?.content ?? []), [file]);
+
+  useEffect(() => {
+    if (!file?.id) return;
+    const saved = perFileThreadsRef.current[file.id] ?? {};
+    setSidebarThreads(saved);
+    setSelectedLine(null);
+    if (onFileEmojiCountsChange) {
+      onFileEmojiCountsChange(file.id, byTypeCounts(saved));
+    }
+  }, [file?.id, onFileEmojiCountsChange]);
+
+  // ✅ 스레드가 바뀌면: 현재 파일 키로 캐시에 저장 + 부모에 집계 전달
+  useEffect(() => {
+    if (!file?.id) return;
+    perFileThreadsRef.current[file.id] = sidebarThreads;
+    if (onFileEmojiCountsChange) {
+      onFileEmojiCountsChange(file.id, byTypeCounts(sidebarThreads));
+    }
+  }, [sidebarThreads, file?.id, onFileEmojiCountsChange]);
+
+  const activeBase = lines.find(l => l.number === selectedLine);
+
+  // 보기 전용(전역 + 사이드바 합치기) — 전역 댓글이 있으면 합치고, 없으면 로컬만
+  const activeThreads = useMemo<SidebarThread[] | undefined>(() => {
+    if (!activeBase) return undefined;
+    const global = (activeBase.comments ?? []) as SidebarThread[];
+    const local = sidebarThreads[activeBase.number] ?? [];
+    return [...global, ...local];
+  }, [activeBase, sidebarThreads]);
+
+  const fileHeaderEmoji = useMemo(() => headerEmojiCounts(sidebarThreads), [sidebarThreads]);
 
   if (!file) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-blue-50/20">
+      <div className="flex-1 min-h-0 flex items-center justify-center bg-gray-50">
         <div className="text-center text-gray-500">
-          <MessageSquare className="w-12 h-12 mx-auto mb-4 text-blue-300" />
+          <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-300" />
           <p>파일을 선택해주세요</p>
         </div>
       </div>
     );
   }
-
   if (file.isDeleted) {
-    return (
-      <div className="flex-1 flex flex-col">
-        <div className="p-4 border-b border-blue-200 bg-blue-100/50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h3 className="text-blue-900">{file.name}</h3>
-              <Badge variant="destructive">삭제됨</Badge>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" className="text-blue-600 border-blue-300">
-                히스토리 보기
-              </Button>
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex-1 flex items-center justify-center bg-blue-50/20">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <MessageSquare className="w-8 h-8 text-red-500" />
-            </div>
-            <h3 className="text-red-700 mb-2">파일이 삭제되었습니다</h3>
-            <p className="text-gray-600 mb-4">이 파일은 더 이상 사용할 수 없습니다.</p>
-            <Button variant="outline" className="text-blue-600">
-              히스토리에서 이전 버전 보기
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
+    return <div className="p-8 text-center text-gray-500">삭제된 파일입니다.</div>;
   }
 
+  /* ---- 사이드바 전용: 상위 댓글/답글 추가 (전역 영향 X) ---- */
+  const addSidebarTop = (lineNo: number, content: string, type: EmojiType) => {
+    const newComment: SidebarThread = {
+      id: `sb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      user: "나",
+      content,
+      type,
+    };
+    setSidebarThreads(prev => ({
+      ...prev,
+      [lineNo]: [ ...(prev[lineNo] ?? []), newComment ],
+    }));
+  };
+
+  const addSidebarReply = (lineNo: number, parentId: string, content: string) => {
+    const reply: CodeComment = {
+      id: `sb_r_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      user: "나",
+      content,
+      type: EmojiType.QUESTION,
+    };
+    setSidebarThreads(prev => {
+      const list = [ ...(prev[lineNo] ?? []) ];
+      const i = list.findIndex(t => t.id === parentId);
+      if (i >= 0) list[i] = { ...list[i], replies: [ ...(list[i].replies ?? []), reply ] };
+      return { ...prev, [lineNo]: list };
+    });
+  };
+
   return (
-    <div className="flex-1 flex flex-col bg-white">
-      {/* Header */}
-      <div className="p-4 border-b border-blue-200 bg-blue-50/50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h3 className="text-blue-900">{file.name}</h3>
-            <div className="flex items-center gap-1 text-sm text-blue-600">
-              <GitBranch className="w-4 h-4" />
-              <span>{file.branch || 'main'}</span>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="text-gray-700 border-gray-300">
-              <MessageSquare className="w-4 h-4 mr-2" />
-              의견 나누기
-            </Button>
-            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
-              <Video className="w-4 h-4 mr-2" />
-              회의
-            </Button>
+    <div className="flex-1 min-h-0 flex flex-col bg-white overflow-hidden">
+      {/* 헤더: 파일명 + (옵션) 파일 단위 이모지 배지 */}
+      <div className="shrink-0 min-h-0 p-4 border-b border-gray-200 bg-gray-50/50">
+        <div className="flex min-h-0 items-center justify-between">
+          <h3 className="text-gray-800 font-semibold">{file.name}</h3>
+          <div className="flex items-center gap-1">
+            {Object.entries(fileHeaderEmoji).map(([emoji, count]) => (
+              <span
+                key={emoji}
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-sm bg-blue-50 text-blue-700 border border-blue-100"
+              >
+                <span className="mr-1">{emoji}</span>{count}
+              </span>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Code Content */}
-      <div className="flex-1 overflow-auto">
-        <div className="font-mono text-sm">
-          {file.content?.map((line) => (
-            <div
-              key={line.number}
-              className={`flex group relative code-line ${
-                selectedLine === line.number ? 'bg-blue-100' : ''
-              } ${hoveredLine === line.number ? 'bg-blue-50' : ''}`}
-              onMouseEnter={() => setHoveredLine(line.number)}
-              onMouseLeave={() => setHoveredLine(null)}
-              onClick={() => setSelectedLine(line.number)}
-            >
-              <div className="w-12 text-right pr-4 py-1 text-gray-400 bg-blue-50/30 border-r border-blue-200 select-none">
-                {line.number}
-              </div>
-              
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* 코드 영역: 클릭 시 사이드바만 열림 (라인 옆 이모지 없음) */}
+        <div className="flex-1 min-h-0 min-w-0 overflow-y-auto">
+          <div className="font-mono text-sm">
+            {lines?.map(line => (
               <div
-                className="flex-1 px-4 py-1"
-                dangerouslySetInnerHTML={{ __html: syntaxHighlight(line.content) }}
-              />
-              
-              {/* Action buttons on hover */}
-              {hoveredLine === line.number && (
-                <div className="absolute right-2 top-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                        😊
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                      {['⭐', '❤️', '👍', '🎉', '🔥'].map(emoji => (
-                        <DropdownMenuItem 
-                          key={emoji}
-                          onClick={() => onAddEmoji(line.number, emoji)}
-                        >
-                          {emoji}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-6 w-6 p-0"
-                    onClick={() => onAddComment(line.number, '')}
-                  >
-                    <MessageSquare className="w-3 h-3" />
-                  </Button>
+                key={line.number}
+                className={cn("flex group relative code-line", {
+                  "bg-blue-50": selectedLine === line.number,
+                  "hover:bg-gray-50": selectedLine !== line.number,
+                })}
+                onClick={() => setSelectedLine(line.number)}
+              >
+                <div className="w-16 text-right pr-4 py-1 text-gray-400 bg-gray-50/30 border-r border-gray-200 select-none">
+                  {line.number}
                 </div>
-              )}
-
-              {/* Emojis */}
-              {line.emojis && line.emojis.length > 0 && (
-                <div className="absolute right-16 top-1 flex gap-1">
-                  {line.emojis.slice(0, 3).map((emojiData, index) => (
-                    <div 
-                      key={index}
-                      className="bg-blue-100 border border-blue-200 rounded px-1 text-xs flex items-center gap-1"
-                    >
-                      <span>{emojiData.emoji}</span>
-                      <span className="text-blue-600">{emojiData.count}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )) || (
-            <div className="p-8 text-center text-gray-500">
-              <p>파일 내용을 불러올 수 없습니다.</p>
-            </div>
-          )}
+                <div
+                  className="flex-1 px-4 py-1"
+                  dangerouslySetInnerHTML={{ __html: syntaxHighlight(line.content) }}
+                />
+              </div>
+            )) || (
+              <div className="p-8 text-center text-gray-500">
+                <p>파일 내용을 불러올 수 없습니다.</p>
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* 사이드바 */}
+        {activeBase && (
+          <CommentSidebar
+            lineNumber={activeBase.number}
+            threads={activeThreads ?? []}
+            onClose={() => setSelectedLine(null)}
+            onAddTop={(type, content) => addSidebarTop(activeBase.number, content, type)}
+            onAddReply={(parentId, content) => addSidebarReply(activeBase.number, parentId, content)}
+          />
+        )}
       </div>
     </div>
   );

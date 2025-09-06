@@ -210,7 +210,8 @@ export function CommentThread({
       {/* Delete Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
-          <AlertDialogHeader>
+          <AlertDialogHeader>❓
+
             <AlertDialogTitle>댓글 삭제</AlertDialogTitle>
             <AlertDialogDescription>
               이 댓글을 삭제하시겠습니까? 삭제된 댓글은 복구할 수 없습니다.
