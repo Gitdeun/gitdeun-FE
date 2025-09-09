@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
-// 💡 새로 만든 api 파일에서 두 함수 모두 가져옵니다.
 import { fetchSkills, updateUserSkills } from "../../api/userSkill.ts";
 
 // --- 타입 정의 ---
@@ -31,9 +30,7 @@ const CheckIcon = ({ className }: { className?: string }) => (
 );
 
 
-// --- UI 섹션 컴포넌트 ---
 function TechStackSection({ title, items, selectedItems, onToggle, selectedCount, totalCount, theme }: TechStackSectionProps) {
-    // 💡 3. 그라데이션과 그림자 효과를 추가합니다.
     const selectedClasses = theme === 'sky'
         ? "bg-gradient-to-br from-sky-500 to-sky-600 text-white shadow-lg"
         : "bg-gradient-to-br from-cyan-500 to-cyan-600 text-white shadow-lg";
