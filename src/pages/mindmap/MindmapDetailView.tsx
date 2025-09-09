@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import go from 'gojs';
 import { Header } from "../../components/mindmap/Header";
-import { CodeViewer } from "../../components/mindmap/CodeViewer";
-import { InviteModal } from "../../components/mindmap/InviteModal";
+// CodeViewer import는 더 이상 필요하지 않습니다.
+import { InviteModal } from "../../components/modal/InviteModal";
 import { toast } from "sonner";
 import type { Mindmap as MindmapType } from '../../types';
-
 
 export interface Mindmap extends MindmapType {
   data: MindMapDataNode;
@@ -25,16 +24,7 @@ interface GoJSNodeData extends go.ObjectData {
   originalData: MindMapDataNode & { key: number };
 }
 
-interface Comment {
-  id: string;
-  nodeId: number;
-  author: string;
-  content: string;
-  timestamp: string;
-  reactions: Record<string, number>;
-}
-
-const mockCode = `// Code content for the selected file would be fetched here.`;
+// mockCode 상수를 제거했습니다.
 
 const transformDataForGoJS = (data: MindMapDataNode) => {
   const nodes: GoJSNodeData[] = [];
@@ -64,9 +54,7 @@ const transformDataForGoJS = (data: MindMapDataNode) => {
 
 export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBack: () => void }) {
   const [selectedNode, setSelectedNode] = useState<(MindMapDataNode & { key: number }) | null>(null);
-  const [selectedFile, setSelectedFile] = useState<string>("");
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [reportCounts, setReportCounts] = useState<Record<string, number>>({});
+  // selectedFile 상태를 제거했습니다.
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const diagramRef = useRef<HTMLDivElement>(null);
   const diagramInstance = useRef<go.Diagram | null>(null);
@@ -76,50 +64,7 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
       setSelectedNode(null);
     } else {
       setSelectedNode(node);
-      if (node.related_files && node.related_files.length > 0) {
-        setSelectedFile(node.related_files[0]);
-      } else {
-        setSelectedFile("연결된 파일 없음");
-      }
-    }
-  };
-
-  const handleAddComment = (content: string) => {
-    if (!selectedNode) return;
-    const newComment: Comment = {
-      id: Date.now().toString(),
-      nodeId: selectedNode.key,
-      author: "현재사용자",
-      content,
-      timestamp: new Date().toISOString(),
-      reactions: {}
-    };
-    setComments(prev => [...prev, newComment]);
-    toast.success("댓글이 추가되었습니다.");
-  };
-
-  const handleReaction = (commentId: string, emoji: string) => {
-    setComments(prev => prev.map(comment => {
-      if (comment.id === commentId) {
-        const currentCount = comment.reactions[emoji] || 0;
-        return { ...comment, reactions: { ...comment.reactions, [emoji]: currentCount + 1 } };
-      }
-      return comment;
-    }));
-  };
-
-  const handleDeleteComment = (commentId: string) => {
-    setComments(prev => prev.filter(comment => comment.id !== commentId));
-    toast.success("댓글이 삭제되었습니다.");
-  };
-
-  const handleReportComment = (commentId: string) => {
-    const newCount = (reportCounts[commentId] || 0) + 1;
-    setReportCounts(prev => ({ ...prev, [commentId]: newCount }));
-    if (newCount >= 5) {
-      toast.error("신고가 5회 누적되어 관리자에게 알림이 전송되었습니다.");
-    } else {
-      toast.info(`신고가 접수되었습니다. (${newCount}/5)`);
+      // selectedFile을 설정하는 로직을 제거했습니다.
     }
   };
 
@@ -129,10 +74,6 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
       toast.info("프로젝트에서 나갔습니다.");
     }
   };
-
-  const selectedNodeComments = comments.filter(
-    comment => comment.nodeId === selectedNode?.key
-  );
 
   useEffect(() => {
     if (!diagramRef.current || !mindmap.data) return;
@@ -200,17 +141,7 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
           </button>
           <div ref={diagramRef} className="flex-1" />
         </div>
-        {selectedNode && (
-          <CodeViewer
-            fileName={selectedFile}
-            code={mockCode}
-            comments={selectedNodeComments}
-            onAddComment={handleAddComment}
-            onReaction={handleReaction}
-            onDeleteComment={handleDeleteComment}
-            onReportComment={handleReportComment}
-          />
-        )}
+        {/* CodeViewer 컴포넌트 렌더링 부분을 완전히 제거했습니다. */}
       </div>
       <InviteModal
         open={inviteModalOpen}

@@ -114,3 +114,4 @@ export type Mindmap = {
   eta?: string;
   type: '개발용' | '확인용';
 };
+

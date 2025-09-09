@@ -11,6 +11,26 @@ interface UpdateSkillsPayload {
   };
 }
 
+interface Skill {
+  name: string;
+  selected: boolean;
+}
+
+
+export const skillList = async (): Promise<Skill[]> => {
+  const accessToken = localStorage.getItem('accessToken');
+  if (!accessToken) {
+    throw new Error("인증 토큰을 찾을 수 없습니다.");
+  }
+
+  const response = await API.get('/skills/me', {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`
+    }
+  });
+
+  return response.data.categorizedSkills.LANGUAGE;
+};
 
 export const fetchSkills = async (): Promise<string[]> => {
   const accessToken = localStorage.getItem('accessToken');

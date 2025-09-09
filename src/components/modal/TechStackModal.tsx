@@ -4,14 +4,17 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
-// 💡 새로 만든 api 파일에서 두 함수 모두 가져옵니다.
-import { fetchSkills, updateUserSkills } from "../../api/userSkill.ts";
+import { fetchSkills, updateUserSkills, skillList } from "../../api/userSkill.ts";
 
-// --- 타입 정의 ---
 interface TechStackModalProps {
     onSelectionChange?: (selection: { languages: string[] }) => void;
     onClose?: () => void;
     isOpen?: boolean;
+}
+
+interface Skill {
+    name: string;
+    selected: boolean;
 }
 
 interface TechStackSectionProps {
@@ -31,9 +34,7 @@ const CheckIcon = ({ className }: { className?: string }) => (
 );
 
 
-// --- UI 섹션 컴포넌트 ---
 function TechStackSection({ title, items, selectedItems, onToggle, selectedCount, totalCount, theme }: TechStackSectionProps) {
-    // 💡 3. 그라데이션과 그림자 효과를 추가합니다.
     const selectedClasses = theme === 'sky'
         ? "bg-gradient-to-br from-sky-500 to-sky-600 text-white shadow-lg"
         : "bg-gradient-to-br from-cyan-500 to-cyan-600 text-white shadow-lg";
@@ -54,7 +55,6 @@ function TechStackSection({ title, items, selectedItems, onToggle, selectedCount
                         <Button
                             key={item}
                             variant={isSelected ? "default" : "outline"}
-                            // 💡 2. 동적인 호버 효과와 아이콘을 위한 flex 스타일을 추가합니다.
                             className={`rounded-full px-7 py-3 text-lg transition-transform duration-200 hover:-translate-y-1 flex items-center gap-2 ${isSelected ? selectedClasses : unselectedClasses}`}
                             onClick={() => onToggle(item)}
                         >
@@ -81,17 +81,28 @@ export function TechStackModal({ onSelectionChange, onClose, isOpen }: TechStack
             setIsLoading(true);
             setError(null);
 
-            fetchSkills()
-                .then(fetchedLanguages => {
-                    setLanguages(fetchedLanguages);
-                })
-                .catch(err => {
-                    console.error("Failed to fetch skills:", err);
-                    setError("기술 스택 목록을 불러오는 데 실패했습니다.");
-                })
-                .finally(() => {
-                    setIsLoading(false);
-                });
+            // [수정] Promise.all을 사용해 두 API를 동시에 호출합니다.
+            Promise.all([
+                fetchSkills(), // 1. 선택 가능한 모든 언어 목록
+                skillList()    // 2. 사용자가 이전에 선택했던 언어 목록
+            ])
+            .then(([allLanguages, userSkills]) => {
+                // 전체 언어 목록 상태 업데이트
+                setLanguages(allLanguages);
+
+                // 사용자가 선택한 언어 목록 필터링 및 상태 업데이트
+                const previouslySelected = userSkills
+                    .filter((skill: Skill) => skill.selected)
+                    .map((skill: Skill) => skill.name);
+                setSelectedLanguages(previouslySelected);
+            })
+            .catch(err => {
+                console.error("Failed to fetch skills:", err);
+                setError("기술 스택 목록을 불러오는 데 실패했습니다.");
+            })
+            .finally(() => {
+                setIsLoading(false);
+            });
         }
     }, [isOpen]);
 
@@ -107,6 +118,8 @@ export function TechStackModal({ onSelectionChange, onClose, isOpen }: TechStack
     const handleClose = () => {
         onClose?.();
     };
+
+
 
     const handleComplete = async () => {
         setIsSubmitting(true);
@@ -131,7 +144,7 @@ export function TechStackModal({ onSelectionChange, onClose, isOpen }: TechStack
         }
         return (
             <>
-                <ScrollArea className="pr-4 -mr-4"> {/* 스크롤바가 콘텐츠를 가리지 않도록 음수 마진 추가 */}
+                <ScrollArea className="pr-4 -mr-4">
                     <div className="space-y-8">
                         <TechStackSection
                             title="개발 언어"
@@ -178,4 +191,3 @@ export function TechStackModal({ onSelectionChange, onClose, isOpen }: TechStack
         </Dialog>
     );
 }
-
