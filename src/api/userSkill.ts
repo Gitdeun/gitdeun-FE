@@ -1,9 +1,4 @@
-import axios from "axios";
-
-const API = axios.create({
-  baseURL: "http://localhost:8080/api",
-  withCredentials: true,
-});
+import httpClient from "./httpClient";
 
 interface UpdateSkillsPayload {
   categorizedSkills: {
@@ -11,58 +6,22 @@ interface UpdateSkillsPayload {
   };
 }
 
-interface Skill {
-  name: string;
-  selected: boolean;
-}
-
-
-export const skillList = async (): Promise<Skill[]> => {
-  const accessToken = localStorage.getItem('accessToken');
-  if (!accessToken) {
-    throw new Error("인증 토큰을 찾을 수 없습니다.");
-  }
-
-  const response = await API.get('/skills/me', {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`
-    }
-  });
-
-  return response.data.categorizedSkills.LANGUAGE;
+// 내 스킬 조회
+export const skillList = async (): Promise<string[]> => {
+  const res = await httpClient.get("/skills/me");
+  return res.data.categorizedSkills.LANGUAGE;
 };
 
+// 전체 스킬 조회
 export const fetchSkills = async (): Promise<string[]> => {
-  const accessToken = localStorage.getItem('accessToken');
-  if (!accessToken) {
-    throw new Error("인증 토큰을 찾을 수 없습니다.");
-  }
-
-  const response = await API.get('/skills', {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`
-    }
-  });
-
-  return response.data.categorizedSkills.LANGUAGE;
+  const res = await httpClient.get("/skills");
+  return res.data.categorizedSkills.LANGUAGE;
 };
 
+// 내 스킬 업데이트
 export const updateUserSkills = async (languages: string[]): Promise<void> => {
-  const accessToken = localStorage.getItem('accessToken');
-  if (!accessToken) {
-    throw new Error("인증 토큰을 찾을 수 없습니다.");
-  }
-
   const payload: UpdateSkillsPayload = {
-    categorizedSkills: {
-      LANGUAGE: languages,
-    },
+    categorizedSkills: { LANGUAGE: languages },
   };
-
-  await API.post('/skills/me', payload, {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-    },
-  });
+  await httpClient.post("/skills/me", payload);
 };
-
