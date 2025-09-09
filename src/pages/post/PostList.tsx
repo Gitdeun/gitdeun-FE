@@ -1,10 +1,11 @@
+// src/pages/post/PostList.tsx
 import { useEffect, useMemo, useState } from "react";
-import { Chip, Group, Loader, TextInput, Tooltip } from "@mantine/core";
-import { Search, Plus } from "lucide-react";           
-import { Link } from "react-router-dom";               
+import { Chip, Group, Loader, TextInput, Tooltip, Badge } from "@mantine/core";
+import { Search, Plus } from "lucide-react";
+import { Link } from "react-router-dom";
 import PostCard from "./postlist/PostCard";
 import { AREA_MAP, SKILL_MAP, STATUS_LABELS } from "../../constants/recruitmentEnums";
-import { getRecruitments } from "../../api/recruitments";
+import { getRecruitments, getRecommendedRecruitments } from "../../api/recruitments";
 import type { Page, Recruitment } from "../../api/recruitments";
 
 const invert = (obj: Record<string, string>) =>
@@ -13,8 +14,12 @@ const invert = (obj: Record<string, string>) =>
 const AREA_LABEL_MAP = invert(AREA_MAP);
 const SKILL_LABEL_MAP = invert(SKILL_MAP);
 
-
 export default function PostList() {
+  const [mode, setMode] = useState<"all" | "rec">("all");
+  const base = "inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition border";
+  const active = "bg-sky-300 text-white border-sky-300 shadow-sm";
+  const inactive = "bg-white text-gray-700 border-gray-200 hover:border-gray-300";
+
   const [status, setStatus] = useState<keyof typeof STATUS_LABELS | "">("");
   const [fields, setFields] = useState<string[]>([]);
   const [skills, setSkills] = useState<string[]>([]);
@@ -47,15 +52,20 @@ export default function PostList() {
       setLoading(true);
       setError(null);
       try {
-        const result = await getRecruitments({
-          status: status || undefined,
-          field: fields.length ? fields : undefined,
-          language: skills.length ? skills : undefined,
-          q: qDebounced || undefined,
-          page,
-          size,
-        });
-        setData(result);
+        if (mode === "rec") {
+          const result = await getRecommendedRecruitments({ page, size });
+          setData(result);
+        } else {
+          const result = await getRecruitments({
+            status: status || undefined,
+            field: fields.length ? fields : undefined,
+            language: skills.length ? skills : undefined,
+            q: qDebounced || undefined,
+            page,
+            size,
+          });
+          setData(result);
+        }
       } catch (e: any) {
         setError(e?.message ?? "불러오기 실패");
       } finally {
@@ -63,7 +73,7 @@ export default function PostList() {
       }
     };
     fetchList();
-  }, [status, fields, skills, qDebounced, page, size]);
+  }, [mode, status, fields, skills, qDebounced, page, size]);
 
   const totalFound = data?.totalElements ?? 0;
 
@@ -74,6 +84,7 @@ export default function PostList() {
         <p className="mt-2 text-sm text-gray-500">
           함께 성장할 팀원을 찾고 있나요? 다양한 프로젝트에 참여해보세요!
         </p>
+
         <div className="max-w-3xl mx-auto mt-5">
           <TextInput
             value={query}
@@ -87,7 +98,32 @@ export default function PostList() {
               input:
                 "rounded-2xl border border-gray-200 focus:border-sky-300 focus:ring-0",
             }}
+            disabled={mode === "rec"} 
           />
+          {mode === "rec" && (
+            <div className="mt-2 text-xs text-gray-500">
+              추천 모드에서는 검색/필터가 적용되지 않을 수 있어요.
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-center gap-4 mt-6">
+          <button
+            type="button"
+            onClick={() => setMode('all')}
+            className={`${base} ${mode === 'all' ? active : inactive}`}
+            aria-pressed={mode === 'all'}
+          >
+            전체 목록
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('rec')}
+            className={`${base} ${mode === 'rec' ? active : inactive}`}
+            aria-pressed={mode === 'rec'}
+          >
+            추천 모집글
+          </button>
         </div>
       </div>
 
@@ -103,7 +139,7 @@ export default function PostList() {
 
       <section className="mb-4">
         <div className="mb-2 text-sm font-semibold text-gray-700">모집 상태</div>
-        <Group gap="xs" wrap="wrap">
+        <Group gap="xs" wrap="wrap" className={mode === "rec" ? "opacity-60" : ""}>
           {[
             { label: "모든 상태", value: "" },
             { label: "모집 예정", value: "FORTHCOMING" },
@@ -120,6 +156,7 @@ export default function PostList() {
               className={[
                 "px-3 py-1.5 rounded-full text-sm",
                 "border",
+                mode === "rec" ? "pointer-events-none" : "",
                 status === opt.value
                   ? "bg-sky-300 border-sky-300 text-white"
                   : "bg-white border-gray-200 text-gray-700 hover:border-gray-300",
@@ -133,7 +170,7 @@ export default function PostList() {
 
       <section className="mb-4">
         <div className="mb-2 text-sm font-semibold text-gray-700">카테고리</div>
-        <Group gap="xs" wrap="wrap">
+        <Group gap="xs" wrap="wrap" className={mode === "rec" ? "opacity-60" : ""}>
           <Chip
             checked={fields.length === 0}
             onChange={() => {
@@ -146,6 +183,7 @@ export default function PostList() {
                 "px-3 py-1 text-sm rounded-full border data-[checked=true]:bg-blue-300 data-[checked=true]:text-white",
               input: "hidden",
             }}
+            disabled={mode === "rec"}
           >
             전체
           </Chip>
@@ -165,6 +203,7 @@ export default function PostList() {
                   "px-3 py-1 text-sm rounded-full border border-gray-200 data-[checked=true]:bg-blue-300 data-[checked=true]:text-white",
                 input: "hidden",
               }}
+              disabled={mode === "rec"}
             >
               {a.label}
             </Chip>
@@ -174,7 +213,7 @@ export default function PostList() {
 
       <section className="mb-6">
         <div className="mb-2 text-sm font-semibold text-gray-700">기술 스택</div>
-        <Group gap="xs" wrap="wrap">
+        <Group gap="xs" wrap="wrap" className={mode === "rec" ? "opacity-60" : ""}>
           {skillOptions.map((s) => (
             <Chip
               key={s.value}
@@ -191,6 +230,7 @@ export default function PostList() {
                   "px-3 py-1 text-sm rounded-full border border-gray-200 data-[checked=true]:bg-sky-300 data-[checked=true]:text-white",
                 input: "hidden",
               }}
+              disabled={mode === "rec"}
             >
               {s.label}
             </Chip>
@@ -198,9 +238,17 @@ export default function PostList() {
         </Group>
       </section>
 
-      <div className="mb-3 text-sm text-gray-600">
-        총 <span className="font-semibold text-gray-800">{totalFound}</span>개의 프로젝트를
-        찾았습니다
+      <div className="flex items-center gap-3 mb-3">
+        <div className="text-sm text-gray-600">
+          총{" "}
+          <span className="font-semibold text-gray-800">{totalFound}</span>
+          개의 프로젝트를 찾았습니다
+        </div>
+        {mode === "rec" && (
+          <Badge color="blue" variant="light" className="ml-auto">
+            추천 순 정렬
+          </Badge>
+        )}
       </div>
 
       {loading ? (

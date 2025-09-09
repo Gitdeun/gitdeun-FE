@@ -81,3 +81,19 @@ export const applyRecruitment = async (
   const res = await httpClient.post(`/recruitments/${recruitmentId}/applications`, body);
   return res.data;
 };
+
+export type RecommendationListParams = {
+  page?: number;
+  size?: number;
+};
+
+export async function getRecommendedRecruitments(params: RecommendationListParams = {}) {
+  const res = await httpClient.get<Page<Recruitment>>(
+    "/recruitments/recommendations",
+    {
+      params,
+      paramsSerializer: (p) => qs.stringify(p, { arrayFormat: "repeat" }),
+    }
+  );
+  return res.data;
+}
