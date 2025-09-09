@@ -5,7 +5,7 @@ import { Badge } from '../../components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '../../components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { TechStackModal } from '../../components/modal/TechStackModal.tsx';
-import { User, Mail, Code, Edit3, FileText, Send, Heart, Calendar, MapPin, Users } from 'lucide-react';
+import { User, Mail, Code, Edit3, FileText, Send, Calendar, MapPin, Users } from 'lucide-react';
 import {useLocation, useNavigate} from "react-router-dom";
 import { getUserInfo } from "../../api/auth";
 import { skillList } from "../../api/userSkill.ts";
@@ -101,18 +101,6 @@ export function MyPage() {
     },
   ]);
 
-  const [bookmarkedPosts] = useState<JobPost[]>([
-    {
-      id: 6,
-      title: 'React 개발자',
-      company: '이커머스 플랫폼',
-      location: '서울 송파구',
-      date: '2024-12-05',
-      status: '모집중',
-      languages: ['React', 'TypeScript', 'Next.js']
-    },
-  ]);
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case '모집중': return 'bg-green-100 text-green-800 border-green-300';
@@ -179,7 +167,7 @@ export function MyPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1">
-            <Card className="bg-white/80 backdrop-blur-sm border-sky-200 shadow-lg h-full">
+            <Card className="bg-white/80 backdrop-blur-sm border-sky-200 shadow-lg h-full min-h-[500px]">
               <CardHeader className="text-center pb-6">
                 <div className="flex justify-center mb-4">
                   <Avatar className="h-20 w-20">
@@ -194,7 +182,7 @@ export function MyPage() {
                   사용자 프로필
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-6 flex flex-col justify-center">
                 <div className="bg-sky-50 rounded-lg p-4 border border-sky-200">
                   <div className="flex items-center gap-3">
                     <Mail className="h-5 w-5 text-sky-600" />
@@ -243,13 +231,13 @@ export function MyPage() {
           </div>
 
           <div className="lg:col-span-2">
-            <Card className="bg-white/80 backdrop-blur-sm border-sky-200 shadow-lg h-full">
+            <Card className="bg-white/80 backdrop-blur-sm border-sky-200 shadow-lg h-full min-h-[600px]">
               <CardHeader>
                 <CardTitle className="text-sky-800">모집공고 관리</CardTitle>
               </CardHeader>
               <CardContent>
                 <Tabs defaultValue="my-posts" className="w-full">
-                  <TabsList className="grid grid-cols-3 bg-sky-100/50 border border-sky-200">
+                  <TabsList className="grid w-full grid-cols-2 bg-sky-100/50 border border-sky-200">
                     <TabsTrigger value="my-posts" className="data-[state=active]:bg-sky-500 data-[state=active]:text-white text-sky-700">
                       <FileText className="h-4 w-4 mr-2" />
                       작성한 공고
@@ -257,10 +245,6 @@ export function MyPage() {
                     <TabsTrigger value="applied" className="data-[state=active]:bg-sky-500 data-[state=active]:text-white text-sky-700">
                       <Send className="h-4 w-4 mr-2" />
                       신청한 공고
-                    </TabsTrigger>
-                    <TabsTrigger value="bookmarked" className="data-[state=active]:bg-sky-500 data-[state=active]:text-white text-sky-700">
-                      <Heart className="h-4 w-4 mr-2" />
-                      즐겨찾기
                     </TabsTrigger>
                   </TabsList>
 
@@ -272,11 +256,6 @@ export function MyPage() {
                   <TabsContent value="applied" className="mt-6">
                      <div className="space-y-4">
                       {appliedPosts.map((post) => (<JobPostCard key={post.id} post={post} />))}
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="bookmarked" className="mt-6">
-                    <div className="space-y-4">
-                      {bookmarkedPosts.map((post) => (<JobPostCard key={post.id} post={post} />))}
                     </div>
                   </TabsContent>
                 </Tabs>
