@@ -1,3 +1,4 @@
+
 import { Routes, Route, Navigate } from "react-router-dom";
 import Home from "./pages/home/Home";
 import Login from "./pages/login/Login";
@@ -6,18 +7,20 @@ import Code from "./pages/code/Code";
 import Meeting from "./pages/meeting/MeetingRoom";
 import Layout from "./layouts/Layout";
 import OAuthCallback from "./pages/login/OAuthCallback";
+import {MyPage} from "./pages/mypage/Mypage.tsx";
 function App() {
   return (
     <Routes>
-      <Route path="/oauth/callback" element={<OAuthCallback />} /> 
+      <Route path="/oauth/callback" element={<OAuthCallback />} />
 
       <Route path="/" element={<Navigate to="/login" />} />
       <Route element={<Layout />}>
-        <Route path="login" element={<Login />} />
-        <Route path="home" element={<Home />} />
-        <Route path="mindmap" element={<Mindmap />} />
-        <Route path="code" element={<Code />} />
-        <Route path="meeting" element={<Meeting />} />
+          <Route path="mypage" element={<MyPage />} />
+          <Route path="login" element={<Login />} />
+          <Route path="home" element={<Home />} />
+          <Route path="mindmap" element={<Mindmap />} />
+          <Route path="code" element={<Code />} />
+          <Route path="meeting" element={<Meeting />} />
       </Route>
     </Routes>
 
@@ -25,4 +28,3 @@ function App() {
 }
 
 export default App;
-
