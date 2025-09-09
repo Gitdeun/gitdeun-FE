@@ -29,3 +29,10 @@ export const SKILL_MAP: Record<string, string> = {
   "Ruby": "RUBY",
   "R": "R",
 };
+
+export const STATUS_LABELS: Record<string, string> = {
+  FORTHCOMING: "모집 예정",
+  RECRUITING: "모집 중",
+  CLOSED: "마감",
+  COMPLETED: "완료",
+};

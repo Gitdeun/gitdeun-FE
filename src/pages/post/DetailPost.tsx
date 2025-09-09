@@ -1,51 +1,22 @@
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Card, Text, Title, Badge, Group, Avatar } from "@mantine/core";
+import { Card, Text, Title, Badge, Group, Avatar, Loader } from "@mantine/core";
 import { Calendar, Users } from "lucide-react";
-import { postsData } from "../../data/postsData";
+import { AREA_MAP, SKILL_MAP, STATUS_LABELS } from "../../constants/recruitmentEnums";
+import { getRecruitmentById } from "../../api/recruitments";
+import type { RecruitmentDetail } from "../../api/recruitments";
 
-const toKoreanStatus: Record<string, string> = {
-  FORTHCOMING: "모집예정",
-  RECRUITING: "모집중",
-  CLOSED: "마감",
-  COMPLETED: "완료",
-};
+const invert = (obj: Record<string, string>) =>
+  Object.fromEntries(Object.entries(obj).map(([k, v]) => [v, k]));
+
+const AREA_LABEL_MAP = invert(AREA_MAP);   
+const SKILL_LABEL_MAP = invert(SKILL_MAP);
 
 const statusColor: Record<string, string> = {
   FORTHCOMING: "gray",
   RECRUITING: "blue",
   CLOSED: "red",
   COMPLETED: "teal",
-};
-
-const LANGUAGE_LABELS: Record<string, string> = {
-  JAVASCRIPT: "JavaScript",
-  TYPESCRIPT: "TypeScript",
-  PYTHON: "Python",
-  JAVA: "Java",
-  KOTLIN: "Kotlin",
-  GO: "Go",
-  RUST: "Rust",
-  CPP: "C++",
-  CSHARP: "C#",
-  SWIFT: "Swift",
-  DART: "Dart",
-  PHP: "PHP",
-  RUBY: "Ruby",
-  R: "R",
-};
-const FIELD_LABELS: Record<string, string> = {
-  FRONTEND: "프론트엔드",
-  BACKEND: "백엔드",
-  FULLSTACK: "풀스택",
-  ANDROID: "안드로이드",
-  IOS: "iOS",
-  DATA: "데이터",
-  DEVOPS: "DevOps",
-  AI: "AI/ML",
-  EMBEDDED: "임베디드",
-  GAME: "게임",
-  SECURITY: "보안",
-  ETC: "기타",
 };
 
 const fmt = (iso: string) =>
@@ -56,10 +27,43 @@ const fmt = (iso: string) =>
   });
 
 export default function DetailPost() {
-  const { id } = useParams();
-  const post = postsData.find((p) => p.id.toString() === id);
+  const { id } = useParams<{ id: string }>();
+  const [post, setPost] = useState<RecruitmentDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!post) return <Text>해당 게시글을 찾을 수 없습니다.</Text>;
+  useEffect(() => {
+    let alive = true;
+    const run = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        if (!id) throw new Error("잘못된 접근입니다.");
+        const data = await getRecruitmentById(id);
+        if (alive) setPost(data);
+      } catch (e: any) {
+        if (alive) setError(e?.message ?? "상세 정보를 불러오지 못했습니다.");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    };
+    run();
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader />
+      </div>
+    );
+  }
+
+  if (error || !post) {
+    return <Text>해당 게시글을 찾을 수 없습니다. {error ? `(${error})` : ""}</Text>;
+  }
 
   return (
     <div className="max-w-5xl px-6 py-10 mx-auto">
@@ -70,18 +74,22 @@ export default function DetailPost() {
         <Badge
           variant="light"
           color={statusColor[post.status] ?? "gray"}
-          size="xl" 
+          size="xl"
           radius="xl"
         >
-          {toKoreanStatus[post.status] ?? post.status}
+          {STATUS_LABELS[post.status] ?? post.status}
         </Badge>
       </div>
 
       <Group gap="xs" className="mt-2 mb-6 text-sm text-gray-600">
-        <Avatar src={post.recruiterProfileImage} size="sm" radius="xl" />
+        <Avatar src={post.recruiterProfileImage ?? undefined} size="sm" radius="xl" />
         <Text>{post.recruiterNickname}</Text>
-        <span>·</span>
-        <Text>2171123@hansung.ac.kr</Text>
+        {post.contactEmail ? (
+          <>
+            <span>·</span>
+            <Text>{post.contactEmail}</Text>
+          </>
+        ) : null}
       </Group>
 
       <div className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2">
@@ -134,7 +142,7 @@ export default function DetailPost() {
               key={tag}
               className="px-3 py-1 text-sm text-blue-700 border border-blue-200 rounded-full bg-blue-50"
             >
-              {LANGUAGE_LABELS[tag] ?? tag}
+              {SKILL_LABEL_MAP[tag] ?? tag}
             </span>
           ))}
         </div>
@@ -151,13 +159,13 @@ export default function DetailPost() {
               key={tag}
               className="px-3 py-1 text-sm border rounded-full bg-emerald-50 text-emerald-700 border-emerald-200"
             >
-              {FIELD_LABELS[tag] ?? tag}
+              {AREA_LABEL_MAP[tag] ?? tag}
             </span>
           ))}
         </div>
       </div>
 
-      {post.images?.length > 0 && (
+      {Array.isArray(post.images) && post.images.length > 0 && (
         <>
           <Text fw={700} className="mb-3">
             프로젝트 이미지
@@ -168,7 +176,8 @@ export default function DetailPost() {
                 key={img.imageId}
                 src={img.imageUrl}
                 alt="프로젝트 이미지"
-                className="object-contain w-full h-34 rounded-xl"
+                className="object-contain w-full rounded-xl"
+                style={{ height: 136 }} 
               />
             ))}
           </div>
