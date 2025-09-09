@@ -4,12 +4,14 @@ import { Card, Text, Title, Badge, Group, Avatar, Loader } from "@mantine/core";
 import { Calendar, Users } from "lucide-react";
 import { AREA_MAP, SKILL_MAP, STATUS_LABELS } from "../../constants/recruitmentEnums";
 import { getRecruitmentById } from "../../api/recruitments";
-import type { RecruitmentDetail } from "../../api/recruitments";
+import { applyRecruitment } from "../../api/recruitments";         
+import type { RecruitmentDetail } from "../../api/recruitments";    
+import ApplyConfirmModal from "./detailpost/ApplyConfirmModal";     
 
 const invert = (obj: Record<string, string>) =>
   Object.fromEntries(Object.entries(obj).map(([k, v]) => [v, k]));
 
-const AREA_LABEL_MAP = invert(AREA_MAP);   
+const AREA_LABEL_MAP = invert(AREA_MAP);  
 const SKILL_LABEL_MAP = invert(SKILL_MAP);
 
 const statusColor: Record<string, string> = {
@@ -32,6 +34,9 @@ export default function DetailPost() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [applyOpen, setApplyOpen] = useState(false);
+  const [applyLoading, setApplyLoading] = useState(false);
+
   useEffect(() => {
     let alive = true;
     const run = async () => {
@@ -52,6 +57,37 @@ export default function DetailPost() {
       alive = false;
     };
   }, [id]);
+
+  const handleApplyConfirm = async ({
+    recruitmentId,
+    appliedField,
+    message,
+  }: {
+    recruitmentId: number | string;
+    appliedField: string;
+    message: string;
+  }) => {
+    try {
+      setApplyLoading(true);
+      await applyRecruitment(recruitmentId, {
+        appliedField,          
+        message,               
+      });
+
+      alert("지원이 완료되었습니다."); 
+      setApplyOpen(false);
+    } catch (e: any) {
+      if (e?.response?.status === 401) {
+        alert("로그인이 필요합니다.");
+      } else if (e?.response?.status === 400) {
+        alert(e?.response?.data?.message ?? "요청 형식이 올바르지 않습니다.");
+      } else {
+        alert(e?.response?.data?.message ?? "지원에 실패했습니다.");
+      }
+    } finally {
+      setApplyLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -170,14 +206,14 @@ export default function DetailPost() {
           <Text fw={700} className="mb-3">
             프로젝트 이미지
           </Text>
-          <div className="grid grid-cols-2 gap-5 mb-10 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-5 mb-10 sm:grid-cols-3 lg:grid-cols-4">
             {post.images.map((img) => (
               <img
                 key={img.imageId}
                 src={img.imageUrl}
                 alt="프로젝트 이미지"
                 className="object-contain w-full rounded-xl"
-                style={{ height: 136 }} 
+                style={{ height: 136 }}
               />
             ))}
           </div>
@@ -185,10 +221,24 @@ export default function DetailPost() {
       )}
 
       <div className="text-center">
-        <button className="px-6 py-2 font-semibold text-white bg-blue-400 rounded-xl hover:bg-blue-500">
+        <button
+          className="px-6 py-2 font-semibold text-white bg-blue-400 rounded-xl hover:bg-blue-500"
+          onClick={() => setApplyOpen(true)}
+        >
           지원하기
         </button>
       </div>
+
+      <ApplyConfirmModal
+        opened={applyOpen}
+        onClose={() => setApplyOpen(false)}
+        recruitmentId={post.id}
+        title={post.title}
+        fieldCandidates={post.fieldTags}           
+        fieldLabelMap={AREA_LABEL_MAP}            
+        onConfirm={handleApplyConfirm}
+        loading={applyLoading}
+      />
     </div>
   );
 }

@@ -66,3 +66,18 @@ export const getRecruitmentById = async (recruitmentId: number | string) => {
   const res = await httpClient.get<RecruitmentDetail>(`/recruitments/${recruitmentId}`);
   return res.data;
 };
+
+export type ApplyRequest = {
+  appliedField: string;  
+  message: string;    
+};
+
+export type ApplyResponse = unknown;
+
+export const applyRecruitment = async (
+  recruitmentId: number | string,
+  body: ApplyRequest
+): Promise<ApplyResponse> => {
+  const res = await httpClient.post(`/recruitments/${recruitmentId}/applications`, body);
+  return res.data;
+};
