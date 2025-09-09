@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Chip, Group, Loader, TextInput, Tooltip } from "@mantine/core";
-import { Search } from "lucide-react";
+import { Search, Plus } from "lucide-react";           
+import { Link } from "react-router-dom";               
 import PostCard from "./postlist/PostCard";
 import { AREA_MAP, SKILL_MAP, STATUS_LABELS } from "../../constants/recruitmentEnums";
 import { getRecruitments } from "../../api/recruitments";
@@ -9,8 +10,8 @@ import type { Page, Recruitment } from "../../api/recruitments";
 const invert = (obj: Record<string, string>) =>
   Object.fromEntries(Object.entries(obj).map(([k, v]) => [v, k]));
 
-const AREA_LABEL_MAP = invert(AREA_MAP);   
-const SKILL_LABEL_MAP = invert(SKILL_MAP); 
+const AREA_LABEL_MAP = invert(AREA_MAP);
+const SKILL_LABEL_MAP = invert(SKILL_MAP);
 
 
 export default function PostList() {
@@ -88,6 +89,16 @@ export default function PostList() {
             }}
           />
         </div>
+      </div>
+
+      <div className="items-center justify-end hidden mb-4 md:flex">
+        <Link
+          to="/post/new"
+          className="inline-flex items-center gap-2 px-4 py-2 font-semibold text-white transition shadow-sm rounded-xl bg-sky-300 hover:bg-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+        >
+          <Plus size={18} />
+          팀원 공고 작성하기
+        </Link>
       </div>
 
       <section className="mb-4">
@@ -249,6 +260,14 @@ export default function PostList() {
           </button>
         </Tooltip>
       </div>
+
+      <Link
+        to="/post/new"
+        aria-label="팀원 공고 작성하기"
+        className="fixed z-50 inline-flex items-center justify-center text-white transition rounded-full shadow-lg md:hidden bottom-6 right-6 h-14 w-14 bg-sky-300 hover:bg-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+      >
+        <Plus size={22} />
+      </Link>
     </div>
   );
 }
