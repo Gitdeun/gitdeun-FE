@@ -1,68 +1,39 @@
-import axios from "axios";
-
-const API = axios.create({
-  baseURL: "http://localhost:8080/api",
-  withCredentials: true,
-});
+import httpClient from "./httpClient";
 
 interface UpdateSkillsPayload {
-  categorizedSkills: {
-    LANGUAGE: string[];
-  };
+  categorizedSkills: { LANGUAGE: string[] };
 }
 
-interface Skill {
-  name: string;
-  selected: boolean;
-}
-
-
-export const skillList = async (): Promise<Skill[]> => {
-  const accessToken = localStorage.getItem('accessToken');
-  if (!accessToken) {
-    throw new Error("인증 토큰을 찾을 수 없습니다.");
-  }
-
-  const response = await API.get('/skills/me', {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`
+const normalizeToSelectedNames = (raw: any): string[] => {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const v of raw) {
+    if (typeof v === "string") {
+      out.push(v);
+    } else if (v && typeof v === "object") {
+      if ("selected" in v) {
+        if (v.selected && typeof v.name === "string") out.push(v.name);
+      } else if (typeof v.name === "string") {
+        out.push(v.name);
+      }
     }
-  });
+  }
+  return Array.from(new Set(out));
+};
 
-  return response.data.categorizedSkills.LANGUAGE;
+export const skillList = async (): Promise<string[]> => {
+  const res = await httpClient.get("/skills/me");
+  const raw = res.data?.categorizedSkills?.LANGUAGE ?? [];
+  return normalizeToSelectedNames(raw);
 };
 
 export const fetchSkills = async (): Promise<string[]> => {
-  const accessToken = localStorage.getItem('accessToken');
-  if (!accessToken) {
-    throw new Error("인증 토큰을 찾을 수 없습니다.");
-  }
-
-  const response = await API.get('/skills', {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`
-    }
-  });
-
-  return response.data.categorizedSkills.LANGUAGE;
+  const res = await httpClient.get("/skills");
+  const raw = res.data?.categorizedSkills?.LANGUAGE ?? [];
+  return normalizeToSelectedNames(raw);
 };
 
 export const updateUserSkills = async (languages: string[]): Promise<void> => {
-  const accessToken = localStorage.getItem('accessToken');
-  if (!accessToken) {
-    throw new Error("인증 토큰을 찾을 수 없습니다.");
-  }
-
-  const payload: UpdateSkillsPayload = {
-    categorizedSkills: {
-      LANGUAGE: languages,
-    },
-  };
-
-  await API.post('/skills/me', payload, {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-    },
-  });
+  const payload: UpdateSkillsPayload = { categorizedSkills: { LANGUAGE: languages } };
+  await httpClient.post("/skills/me", payload);
 };
-
