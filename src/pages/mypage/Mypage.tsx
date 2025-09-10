@@ -4,28 +4,20 @@ import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "../../components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
-import { TechStackModal } from "../../components/modal/TechStackModal.tsx";
-import { User, Mail, Code, Edit3, FileText, Send, Calendar, MapPin, Users } from "lucide-react";
+import { TechStackModal } from "../../components/modal/TechStackModal";
+import { User, Mail, Code, Edit3, FileText, Send } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getUserInfo } from "../../api/auth";
 import { skillList } from "../../api/userSkill";
+import JobPostCard, { type RecruitmentCard } from "./JobPostCard";
+import { getMyRecruitments, getMyApplications, type Recruitment, type MyApplication } from "../../api/userRecruitments";
 
-interface JobPost {
-  id: number;
-  title: string;
-  company: string;
-  location: string;
-  date: string;
-  status: string;
-  languages: string[];
-  applicants?: number;
-}
-
-interface UserData {
-  name: string;
-  email: string;
-  profileImage: string;
-}
+const APP_STATUS_KO: Record<string, string> = {
+  PENDING: "대기",
+  ACCEPTED: "승인",
+  REJECTED: "거절",
+  CANCELLED: "취소",
+};
 
 export function MyPage() {
   const location = useLocation();
@@ -33,33 +25,29 @@ export function MyPage() {
   const [openTechModal, setOpenTechModal] = useState<boolean>(Boolean(location.state?.showTechStackModal));
 
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
-  const [user, setUser] = useState<UserData | null>(null);
+  const [user, setUser] = useState<{ name: string; email: string; profileImage: string } | null>(null);
 
+  const [myRecruitments, setMyRecruitments] = useState<RecruitmentCard[]>([]);
+  const [appliedRecruitments, setAppliedRecruitments] = useState<RecruitmentCard[]>([]);
+  const [loadingMy, setLoadingMy] = useState(false);
+  const [loadingApplied, setLoadingApplied] = useState(false);
+  const [errorMy, setErrorMy] = useState<string | null>(null);
+  const [errorApplied, setErrorApplied] = useState<string | null>(null);
+
+  // 사용자 기본정보
   useEffect(() => {
     const token = localStorage.getItem("accessToken")?.trim();
     if (!token) {
       setUser(null);
       return;
     }
-
     getUserInfo()
-      .then(({ name, email, profileImage }) => {
-        setUser({ name, email, profileImage });
-      })
-      .catch((err) => {
-        console.warn("❗ 사용자 정보를 불러오지 못했습니다:", err);
-        setUser(null);
-      });
+      .then(({ name, email, profileImage }) => setUser({ name, email, profileImage }))
+      .catch(() => setUser(null));
   }, []);
 
   useEffect(() => {
-    skillList()
-      .then((languages) => {
-        setSelectedLanguages(languages);
-      })
-      .catch((err) => {
-        console.error("❗ 관심 언어 목록을 불러오는 데 실패했습니다:", err);
-      });
+    skillList().then(setSelectedLanguages).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -68,91 +56,29 @@ export function MyPage() {
     }
   }, [location.state, navigate]);
 
-  const [myPosts] = useState<JobPost[]>([
-    {
-      id: 1,
-      title: "프론트엔드 개발자 모집",
-      company: "테크스타트업",
-      location: "서울 강남구",
-      date: "2024-12-01",
-      status: "모집중",
-      languages: ["React", "TypeScript", "JavaScript"],
-      applicants: 12,
-    },
-  ]);
+  useEffect(() => {
+    setLoadingMy(true);
+    setErrorMy(null);
+    getMyRecruitments({ page: 0, size: 10 })
+      .then(({ content }) => {
+        const mapped = content.map(mapRecruitmentApiToCard);
+        setMyRecruitments(mapped);
+      })
+      .catch((e) => setErrorMy(e?.message ?? "내 공고를 불러오지 못했습니다."))
+      .finally(() => setLoadingMy(false));
+  }, []);
 
-  const [appliedPosts] = useState<JobPost[]>([
-    {
-      id: 3,
-      title: "백엔드 개발자",
-      company: "핀테크 회사",
-      location: "서울 여의도",
-      date: "2024-12-03",
-      status: "지원완료",
-      languages: ["Java", "Spring", "MySQL"],
-    },
-  ]);
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "모집중":
-        return "bg-green-100 text-green-800 border-green-300";
-      case "마감":
-        return "bg-gray-100 text-gray-800 border-gray-300";
-      case "지원완료":
-        return "bg-blue-100 text-blue-800 border-blue-300";
-      case "서류통과":
-        return "bg-yellow-100 text-yellow-800 border-yellow-300";
-      case "면접대기":
-        return "bg-orange-100 text-orange-800 border-orange-300";
-      default:
-        return "bg-sky-100 text-sky-800 border-sky-300";
-    }
-  };
-
-  const handleSelectionChange = (selection: { languages: Array<string | { name: string }> }) => {
-    const names = selection.languages.map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean) as string[];
-    setSelectedLanguages(names);
-  };
-
-  const JobPostCard = ({ post, showApplicants = false }: { post: JobPost; showApplicants?: boolean }) => (
-    <div className="p-4 transition-shadow border rounded-lg bg-sky-50 border-sky-200 hover:shadow-md">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1">
-          <h4 className="mb-1 text-sky-800">{post.title}</h4>
-          <div className="flex items-center gap-4 mb-2 text-sky-600">
-            <span className="flex items-center gap-1">
-              <MapPin className="w-4 h-4" />
-              {post.company}
-            </span>
-            <span>{post.location}</span>
-          </div>
-        </div>
-        <Badge className={getStatusColor(post.status)}>{post.status}</Badge>
-      </div>
-      <div className="flex items-center justify-between">
-        <div className="flex flex-wrap gap-1">
-          {post.languages.map((lang) => (
-            <Badge key={lang} variant="outline" className="text-xs border-sky-300 text-sky-700">
-              {lang}
-            </Badge>
-          ))}
-        </div>
-        <div className="flex items-center gap-3 text-sky-600">
-          {showApplicants && post.applicants && (
-            <span className="flex items-center gap-1">
-              <Users className="w-4 h-4" />
-              {post.applicants}명
-            </span>
-          )}
-          <span className="flex items-center gap-1">
-            <Calendar className="w-4 h-4" />
-            {post.date}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
+  useEffect(() => {
+    setLoadingApplied(true);
+    setErrorApplied(null);
+    getMyApplications({ page: 0, size: 10 })
+      .then(({ content }) => {
+        const mapped = content.map(mapApplicationApiToCard);
+        setAppliedRecruitments(mapped);
+      })
+      .catch((e) => setErrorApplied(e?.message ?? "신청 목록을 불러오지 못했습니다."))
+      .finally(() => setLoadingApplied(false));
+  }, []);
 
   return (
     <div className="min-h-screen p-6 bg-gradient-to-br from-sky-50 to-blue-100">
@@ -210,11 +136,11 @@ export function MyPage() {
                   {selectedLanguages.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {selectedLanguages.map((language) => (
-                        <Badge 
-                          key={language} 
-                          variant="secondary" 
+                        <Badge
+                          key={language}
+                          variant="secondary"
                           className="bg-sky-100 text-sky-800 border-sky-300"
-                          >
+                        >
                           {language}
                         </Badge>
                       ))}
@@ -235,35 +161,50 @@ export function MyPage() {
               <CardContent>
                 <Tabs defaultValue="my-posts" className="w-full">
                   <TabsList className="grid w-full grid-cols-2 border bg-sky-100/50 border-sky-200">
-                    <TabsTrigger
-                      value="my-posts"
-                      className="data-[state=active]:bg-sky-500 data-[state=active]:text-white text-sky-700"
-                    >
+                    <TabsTrigger value="my-posts" className="data-[state=active]:bg-sky-500 data-[state=active]:text-white text-sky-700">
                       <FileText className="w-4 h-4 mr-2" />
                       작성한 공고
                     </TabsTrigger>
-                    <TabsTrigger
-                      value="applied"
-                      className="data-[state=active]:bg-sky-500 data-[state=active]:text-white text-sky-700"
-                    >
+                    <TabsTrigger value="applied" className="data-[state=active]:bg-sky-500 data-[state=active]:text-white text-sky-700">
                       <Send className="w-4 h-4 mr-2" />
                       신청한 공고
                     </TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="my-posts" className="mt-6">
-                    <div className="space-y-4">
-                      {myPosts.map((post) => (
-                        <JobPostCard key={post.id} post={post} showApplicants />
-                      ))}
-                    </div>
+                    {loadingMy ? (
+                      <div className="p-6 text-center text-gray-500">불러오는 중…</div>
+                    ) : errorMy ? (
+                      <div className="p-6 text-center text-red-500 border rounded-xl bg-red-50">{errorMy}</div>
+                    ) : myRecruitments.length === 0 ? (
+                      <div className="p-6 text-center text-gray-500 border rounded-xl bg-gray-50">
+                        아직 작성한 공고가 없어요.
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {myRecruitments.map((post) => (
+                          <JobPostCard key={post.id} post={post} />
+                        ))}
+                      </div>
+                    )}
                   </TabsContent>
+
                   <TabsContent value="applied" className="mt-6">
-                    <div className="space-y-4">
-                      {appliedPosts.map((post) => (
-                        <JobPostCard key={post.id} post={post} />
-                      ))}
-                    </div>
+                    {loadingApplied ? (
+                      <div className="p-6 text-center text-gray-500">불러오는 중…</div>
+                    ) : errorApplied ? (
+                      <div className="p-6 text-center text-red-500 border rounded-xl bg-red-50">{errorApplied}</div>
+                    ) : appliedRecruitments.length === 0 ? (
+                      <div className="p-6 text-center text-gray-500 border rounded-xl bg-gray-50">
+                        신청한 공고가 아직 없어요.
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {appliedRecruitments.map((post) => (
+                          <JobPostCard key={post.id} post={post} />
+                        ))}
+                      </div>
+                    )}
                   </TabsContent>
                 </Tabs>
               </CardContent>
@@ -272,11 +213,42 @@ export function MyPage() {
         </div>
       </div>
 
-      <TechStackModal 
+      <TechStackModal
         isOpen={openTechModal}
         onClose={() => setOpenTechModal(false)}
-        onSelectionChange={handleSelectionChange} 
+        onSelectionChange={({ languages }) => setSelectedLanguages(languages)}
       />
     </div>
   );
+}
+
+
+function mapRecruitmentApiToCard(r: Recruitment): RecruitmentCard {
+  return {
+    id: r.id,
+    title: r.title,
+    thumbnailUrl: r.thumbnailUrl,
+    status: r.status,
+    languageTags: r.languageTags,
+    fieldTags: r.fieldTags,
+    startAt: r.startAt,
+    endAt: r.endAt,
+    viewCount: r.viewCount,
+    recruitQuota: r.recruitQuota,
+  };
+}
+
+function mapApplicationApiToCard(a: MyApplication): RecruitmentCard {
+  return {
+    id: a.applicationId,
+    title: a.recruitmentTitle,
+    thumbnailUrl: null,                 // API에 썸네일이 없으므로 비움
+    status: APP_STATUS_KO[a.status] ?? a.status, // "대기/승인/거절/취소"로 한글화
+    languageTags: [],                   // 필요 시 백엔드 확장 후 연결
+    fieldTags: [a.appliedField],        // 신청 분야만 표시
+    startAt: a.createdAt,               // 생성일만 있으므로 기간의 시작으로 사용
+    endAt: undefined,
+    viewCount: undefined,
+    recruitQuota: undefined,
+  };
 }
