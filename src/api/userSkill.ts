@@ -1,27 +1,39 @@
 import httpClient from "./httpClient";
 
 interface UpdateSkillsPayload {
-  categorizedSkills: {
-    LANGUAGE: string[];
-  };
+  categorizedSkills: { LANGUAGE: string[] };
 }
 
-// 내 스킬 조회
+const normalizeToSelectedNames = (raw: any): string[] => {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const v of raw) {
+    if (typeof v === "string") {
+      out.push(v);
+    } else if (v && typeof v === "object") {
+      if ("selected" in v) {
+        if (v.selected && typeof v.name === "string") out.push(v.name);
+      } else if (typeof v.name === "string") {
+        out.push(v.name);
+      }
+    }
+  }
+  return Array.from(new Set(out));
+};
+
 export const skillList = async (): Promise<string[]> => {
   const res = await httpClient.get("/skills/me");
-  return res.data.categorizedSkills.LANGUAGE;
+  const raw = res.data?.categorizedSkills?.LANGUAGE ?? [];
+  return normalizeToSelectedNames(raw);
 };
 
-// 전체 스킬 조회
 export const fetchSkills = async (): Promise<string[]> => {
   const res = await httpClient.get("/skills");
-  return res.data.categorizedSkills.LANGUAGE;
+  const raw = res.data?.categorizedSkills?.LANGUAGE ?? [];
+  return normalizeToSelectedNames(raw);
 };
 
-// 내 스킬 업데이트
 export const updateUserSkills = async (languages: string[]): Promise<void> => {
-  const payload: UpdateSkillsPayload = {
-    categorizedSkills: { LANGUAGE: languages },
-  };
+  const payload: UpdateSkillsPayload = { categorizedSkills: { LANGUAGE: languages } };
   await httpClient.post("/skills/me", payload);
 };
