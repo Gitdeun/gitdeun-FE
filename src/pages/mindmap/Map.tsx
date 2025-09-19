@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { MindmapDetailView, type Mindmap } from './MindmapDetailView';
+import { MindmapDetailView } from './MindmapDetailView';
 import { TechStackModal } from '../../components/modal/TechStackModal';
+import type { Mindmap } from '../../types';
 
 const fakeMindmapData = {
   id: 2,
@@ -28,7 +29,8 @@ const fakeMindmapData = {
     ]},
     { node: "사용자 관리", related_files: ["UserController.java"], children: [
       { node: "인증 (JWT)", related_files: ["AuthController.java"], children: [] }
-    ]}
+    ]},
+    
   ]
 };
 
@@ -63,11 +65,9 @@ const MindmapCard = ({ mindmap, onClick }: { mindmap: Mindmap; onClick: () => vo
 );
 
 
-// --- 메인 컴포넌트 ---
 const Map: React.FC = () => {
   const [githubLink, setGithubLink] = useState<string>('');
   const [mindmaps, setMindmaps] = useState<Mindmap[]>([
-    // ✅ 'type' 속성 제거
     { id: 2, link: 'https://github.com/EWSNproject/be.git', title: '혜택온 백엔드', updated: '2025.07.13', pinned: true, data: fakeMindmapData },
     { id: 3, link: 'https://github.com/porjecy123/fe.git', title: '확인용1', updated: '2025.07.13', pinned: true, data: { node: "확인용1 루트", related_files: ["index.js"], children: [] } },
     { id: 1, link: 'https://github.com/EWSNproject/fe.git', title: '혜택온 프론트엔드', updated: '2025.07.13', eta: '5분예정', data: { node: "프론트엔드 루트", related_files: ["App.tsx"], children: [] } },
@@ -75,7 +75,6 @@ const Map: React.FC = () => {
   ]);
   const [error, setError] = useState<string>('');
   const [prompt, setPrompt] = useState<string>('');
-  // URL 파라미터 기반 디테일 모드 감지
   const { id: idParam } = useParams();
 
   const location = useLocation();
