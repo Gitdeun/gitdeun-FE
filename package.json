@@ -26,6 +26,7 @@
     "cmdk": "^1.1.1",
     "dayjs": "^1.11.18",
     "embla-carousel-react": "^8.6.0",
+    "event-source-polyfill": "^1.0.31",
     "gojs": "^3.0.25",
     "immer": "^10.1.1",
     "js-cookie": "^3.0.5",
