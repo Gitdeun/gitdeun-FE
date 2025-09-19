@@ -3,18 +3,11 @@ import { Link } from "react-router-dom";
 import { Calendar, Users, Eye } from "lucide-react";
 import { STATUS_LABELS } from "../../../constants/recruitmentEnums";
 
-const statusColor = (status: string) => {
-  switch (status) {
-    case "RECRUITING":
-      return "bg-sky-300 text-white";
-    case "FORTHCOMING":
-      return "bg-blue-300 text-white";
-    case "COMPLETED":
-      return "bg-gray-400 text-white";
-    case "CLOSED":
-    default:
-      return "bg-gray-500 text-white";
-  }
+const STATUS_BADGE_COLOR: Record<string, "gray" | "blue" | "red" | "teal"> = {
+  FORTHCOMING: "gray",
+  RECRUITING: "blue",
+  CLOSED: "red",
+  COMPLETED: "teal",
 };
 
 const fmtDate = (iso: string) => {
@@ -65,14 +58,18 @@ export default function PostCard({
         ) : (
           <div className="w-full h-48 bg-gradient-to-br from-blue-50 to-sky-100 md:h-56" />
         )}
+
+        {/* ✅ DetailPost와 동일한 스타일/색상으로 통일 */}
         <div className="absolute right-3 top-3">
-          <span
-            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusColor(
-              status
-            )}`}
+          <Badge
+            variant="light"
+            color={STATUS_BADGE_COLOR[status] ?? "gray"}
+            radius="xl"
+            // 크기는 카드에 맞춰 sm. DetailPost처럼 xl 원하면 size="xl"로 변경 가능
+            size="xl"
           >
             {STATUS_LABELS[status] ?? status}
-          </span>
+          </Badge>
         </div>
       </div>
 
@@ -120,11 +117,7 @@ export default function PostCard({
         </div>
       </div>
 
-      <Link
-        to={`/post/${id}`}
-        aria-label={title}
-        className="absolute inset-0 z-10"
-      />
+      <Link to={`/post/${id}`} aria-label={title} className="absolute inset-0 z-10" />
     </article>
   );
 }

@@ -36,6 +36,7 @@ export type RecruitmentListParams = {
   size?: number;
 };
 
+// 모집 공고 목록 조회
 export async function getRecruitments(params: RecruitmentListParams) {
   const res = await httpClient.get<Page<Recruitment>>("/recruitments", {
     params,
@@ -62,6 +63,7 @@ export type RecruitmentDetail = {
   images: null | Array<{ imageId: number; imageUrl: string }>;
 };
 
+// 모집 공고 상세 조회
 export const getRecruitmentById = async (recruitmentId: number | string) => {
   const res = await httpClient.get<RecruitmentDetail>(`/recruitments/${recruitmentId}`);
   return res.data;
@@ -74,6 +76,7 @@ export type ApplyRequest = {
 
 export type ApplyResponse = unknown;
 
+// 지원 신청
 export const applyRecruitment = async (
   recruitmentId: number | string,
   body: ApplyRequest
@@ -87,6 +90,7 @@ export type RecommendationListParams = {
   size?: number;
 };
 
+// 추천 모집 공고 목록 조회
 export async function getRecommendedRecruitments(params: RecommendationListParams = {}) {
   const res = await httpClient.get<Page<Recruitment>>(
     "/recruitments/recommendations",
