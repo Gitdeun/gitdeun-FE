@@ -67,9 +67,15 @@ const loadAppliedMap = (): Record<number, number> => {
     return {};
   }
 };
+
 const saveAppliedMap = (map: Record<number, number>) => {
   localStorage.setItem(APPLIED_MAP_KEY, JSON.stringify(map));
 };
+
+const gmailCompose = (to: string, subject: string, body?: string) =>
+  `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}${
+    body ? `&body=${encodeURIComponent(body)}` : ""
+  }`;
 
 export default function DetailPost() {
   const { id } = useParams<{ id: string }>();
@@ -288,7 +294,14 @@ export default function DetailPost() {
         {post.contactEmail ? (
           <>
             <span>·</span>
-            <Text>{post.contactEmail}</Text>
+            <a
+              href={gmailCompose(post.contactEmail, `[${post.title}] 공고 문의드립니다`)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sky-600 hover:underline"
+            >
+              {post.contactEmail}
+            </a>
           </>
         ) : null}
       </Group>
