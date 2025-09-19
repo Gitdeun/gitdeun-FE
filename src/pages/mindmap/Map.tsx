@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState, useMemo } from 'react';
-import { useLocation, useNavigate } from "react-router-dom";
-import MindmapDetailView, { type Mindmap } from './MindmapDetailView.tsx';
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { MindmapDetailView } from './MindmapDetailView';
 import { TechStackModal } from '../../components/modal/TechStackModal';
+import type { Mindmap } from '../../types';
 
-// --- 데이터 정의 (예시) ---
 const fakeMindmapData = {
-  node: "혜택온(Hyetaekon) 애플리케이션",
+  id: 2,
+  node: "혜택온",
   related_files: ["HyetaekonApplication.java"],
   children: [
     { node: "공공 복지 서비스", related_files: ["PublicServiceController.java", "PublicServiceHandler.java"], children: [
@@ -18,14 +19,22 @@ const fakeMindmapData = {
       { node: "게시글 관리", related_files: ["PostController.java"], children: [] },
       { node: "답변 관리 (Q&A)", related_files: ["AnswerController.java"], children: [] }
     ]},
+    { node: "커뮤니티", related_files: [], children: [
+      { node: "게시글 관리", related_files: ["PostController.java"], children: [] },
+      { node: "답변 관리 (Q&A)", related_files: ["AnswerController.java"], children: [] }
+    ]},
+    { node: "커뮤니티", related_files: [], children: [
+      { node: "게시글 관리", related_files: ["PostController.java"], children: [] },
+      { node: "답변 관리 (Q&A)", related_files: ["AnswerController.java"], children: [] }
+    ]},
     { node: "사용자 관리", related_files: ["UserController.java"], children: [
       { node: "인증 (JWT)", related_files: ["AuthController.java"], children: [] }
-    ]}
+    ]},
+    
   ]
 };
 
-
-// 💡 컴포넌트 분리: 아이콘과 카드 컴포넌트를 Map 컴포넌트 밖으로 이동
+// --- 아이콘 및 카드 UI 컴포넌트 ---
 const ChevronRightIcon = ({ className }: { className?: string }) => (
   <svg className={className || "w-6 h-6 text-gray-400"} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
@@ -42,11 +51,7 @@ const PinIcon = ({ className }: { className?: string }) => (
 const MindmapCard = ({ mindmap, onClick }: { mindmap: Mindmap; onClick: () => void }) => (
     <div onClick={onClick} className="flex flex-col justify-between p-6 rounded-2xl bg-white transition-all duration-300 cursor-pointer border border-slate-200/80 shadow-md hover:shadow-xl hover:-translate-y-1">
       <div>
-        <div className="flex items-center gap-2 mb-3">
-          <span className={`w-3 h-3 rounded-full ${mindmap.type === '개발용' ? 'bg-blue-400' : 'bg-indigo-400'}`}></span>
-          <span className="text-sm font-semibold text-gray-600">{mindmap.type}</span>
-        </div>
-        <p className="text-sm text-gray-400 truncate mb-1">{mindmap.link}</p>
+        <p className="text-sm text-gray-400 truncate mb-2">{mindmap.link}</p>
         <h3 className="text-2xl font-bold text-gray-800 my-1 truncate">{mindmap.title}</h3>
       </div>
       <div className="flex justify-between items-center mt-4">
@@ -60,19 +65,17 @@ const MindmapCard = ({ mindmap, onClick }: { mindmap: Mindmap; onClick: () => vo
 );
 
 
-// --- 메인 컴포넌트 ---
 const Map: React.FC = () => {
   const [githubLink, setGithubLink] = useState<string>('');
-  const [isDevMode, setIsDevMode] = useState<boolean>(true);
   const [mindmaps, setMindmaps] = useState<Mindmap[]>([
-    { id: 2, link: 'https://github.com/EWSNproject/be.git', title: '혜택온 백엔드', updated: '2025.07.13', pinned: true, type: '개발용', data: fakeMindmapData },
-    { id: 3, link: 'https://github.com/porjecy123/fe.git', title: '확인용1', updated: '2025.07.13', pinned: true, type: '확인용', data: { node: "확인용1 루트", related_files: ["index.js"], children: [] } },
-    { id: 1, link: 'https://github.com/EWSNproject/fe.git', title: '혜택온 프론트엔드', updated: '2025.07.13', eta: '5분예정', type: '개발용', data: { node: "프론트엔드 루트", related_files: ["App.tsx"], children: [] } },
-    { id: 4, link: 'https://github.com/another/project.git', title: '새로운 프로젝트', updated: '2025.07.12', type: '확인용', data: { node: "새 프로젝트 루트", related_files: ["main.py"], children: [] } },
+    { id: 2, link: 'https://github.com/EWSNproject/be.git', title: '혜택온 백엔드', updated: '2025.07.13', pinned: true, data: fakeMindmapData },
+    { id: 3, link: 'https://github.com/porjecy123/fe.git', title: '확인용1', updated: '2025.07.13', pinned: true, data: { node: "확인용1 루트", related_files: ["index.js"], children: [] } },
+    { id: 1, link: 'https://github.com/EWSNproject/fe.git', title: '혜택온 프론트엔드', updated: '2025.07.13', eta: '5분예정', data: { node: "프론트엔드 루트", related_files: ["App.tsx"], children: [] } },
+    { id: 4, link: 'https://github.com/another/project.git', title: '새로운 프로젝트', updated: '2025.07.12', data: { node: "새 프로젝트 루트", related_files: ["main.py"], children: [] } },
   ]);
   const [error, setError] = useState<string>('');
   const [prompt, setPrompt] = useState<string>('');
-  const [selectedMindmap, setSelectedMindmap] = useState<Mindmap | null>(null);
+  const { id: idParam } = useParams();
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -98,7 +101,6 @@ const Map: React.FC = () => {
       title: prompt || `새 마인드맵 ${mindmaps.length + 1}`,
       updated: new Date().toISOString().slice(0, 10).replace(/-/g, '.'),
       pinned: false,
-      type: isDevMode ? '개발용' : '확인용',
       data: { node: prompt || `새 마인드맵 루트`, related_files: [], children: [] }
     };
 
@@ -108,14 +110,17 @@ const Map: React.FC = () => {
   };
 
   const handleMindmapClick = (mindmap: Mindmap) => {
-    setSelectedMindmap(mindmap);
+    navigate(`/mindmap/${mindmap.id}`);
   };
 
   const pinnedMindmaps = useMemo(() => mindmaps.filter(m => m.pinned), [mindmaps]);
   const otherMindmaps = useMemo(() => mindmaps.filter(m => !m.pinned), [mindmaps]);
 
-  if (selectedMindmap) {
-    return <MindmapDetailView mindmap={selectedMindmap} onBack={() => setSelectedMindmap(null)} />;
+  // 상세 보기 라우팅 처리: /mindmap/:id 일 때 해당 id로 데이터 조회 후 디테일 렌더
+  if (idParam) {
+    const target = mindmaps.find(m => String(m.id) === String(idParam));
+    if (!target) return <div className="p-6">해당 마인드맵을 찾을 수 없습니다.</div>;
+    return <MindmapDetailView mindmap={target} onBack={() => navigate('/mindmap')} />;
   }
 
   return (
@@ -127,21 +132,6 @@ const Map: React.FC = () => {
           </h1>
           <form onSubmit={handleSubmit} className="w-full flex flex-col items-center">
             <div className="w-full flex items-center bg-white/70 rounded-full p-2 shadow-lg shadow-sky-200/80 mb-8 gap-3 h-20 border border-white">
-              <div
-                onClick={() => setIsDevMode(!isDevMode)}
-                className="cursor-pointer bg-sky-100 rounded-full h-full flex-shrink-0 relative flex items-center p-1"
-                style={{ width: '180px' }}
-              >
-                <div className={`absolute bg-white w-[82px] h-[60px] rounded-full shadow-md transition-transform duration-300 ease-in-out ${isDevMode ? 'translate-x-0' : 'translate-x-[88px]'}`}></div>
-                <div className="relative w-full h-full flex justify-around items-center">
-                  <span className={`font-bold text-lg transition-colors duration-300 ${isDevMode ? 'text-sky-600' : 'text-gray-500'}`}>
-                    개발용
-                  </span>
-                  <span className={`font-bold text-lg transition-colors duration-300 ${!isDevMode ? 'text-sky-600' : 'text-gray-500'}`}>
-                    확인용
-                  </span>
-                </div>
-              </div>
               <input
                 type="text"
                 value={githubLink}
@@ -158,7 +148,7 @@ const Map: React.FC = () => {
             </div>
             <input
               className="w-full max-w-4xl p-4 bg-white/50 rounded-2xl text-sky-900 focus:outline-none focus:ring-2 focus:ring-sky-400 transition-colors placeholder:text-sky-800/60 border border-white/80"
-              placeholder={isDevMode ? "프롬프트 작성해주세요." : "마인드맵 제목을 작성해주세요. 미입력시, AI가 자동으로 생성합니다."}
+              placeholder="마인드맵 제목을 작성해주세요. 미입력시, AI가 자동으로 생성합니다."
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
             />

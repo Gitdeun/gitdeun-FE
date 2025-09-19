@@ -4,7 +4,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Badge } from "../ui/badge";
-import { Share2 } from "lucide-react";
+import { Share2, Eye, Pencil } from "lucide-react";
 
 interface TeamMember {
   id: string;
@@ -72,77 +72,98 @@ export function InviteModal({ open, onOpenChange }: InviteModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md mx-auto bg-gray-100">
+      <DialogContent className="max-w-lg mx-auto bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200 p-0 overflow-hidden">
         <div className="relative">
-          <DialogHeader className="pb-4">
-            <div className="flex items-center justify-between">
-              <DialogTitle className="text-gray-900">혜택온</DialogTitle>
+          <DialogHeader className="pb-0">
+            <div className="flex items-start justify-between px-5 pt-5">
+              <div>
+                <DialogTitle className="text-slate-900">혜택온</DialogTitle>
+                <p className="text-sm text-slate-500 mt-1">프로젝트에 팀원을 초대하고 권한을 설정하세요.</p>
+              </div>
               <Button
                 variant="ghost"
                 onClick={handleShare}
-                className="flex items-center gap-1 p-2 h-auto text-blue-600 hover:text-blue-700"
+                className="flex items-center gap-1 px-3 py-2 h-9 text-sky-700 hover:text-sky-800 hover:bg-sky-50"
               >
                 <Share2 className="w-4 h-4" />
-                <span>공유하기</span>
+                <span className="text-sm">공유하기</span>
               </Button>
             </div>
+            <div className="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent mt-4" />
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="p-5 space-y-5">
             {/* 초대하기 섹션 */}
-            <div className="flex gap-2">
-              <Select value={selectedRole} onValueChange={setSelectedRole}>
-                <SelectTrigger className="w-28 bg-gray-200 border-none">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-white">
-                  <SelectItem value="can view">can view</SelectItem>
-                  <SelectItem value="can edit">can edit</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
+              <div className="flex gap-2 items-center">
+                <Select value={selectedRole} onValueChange={setSelectedRole}>
+                  <SelectTrigger className="w-40 h-9 rounded-lg bg-white border border-sky-200/80 text-sky-800 text-sm shadow-sm hover:bg-sky-50 focus:ring-2 focus:ring-sky-300/50">
+                    <SelectValue placeholder="권한 선택" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white rounded-lg border border-slate-200 shadow-xl p-1">
+                    <SelectItem value="can view" className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-sky-50 focus:bg-sky-50 cursor-pointer">
+                      <Eye className="w-4 h-4 text-sky-600" />
+                      <span className="text-sm text-slate-800">can view</span>
+                    </SelectItem>
+                    <SelectItem value="can edit" className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-sky-50 focus:bg-sky-50 cursor-pointer">
+                      <Pencil className="w-4 h-4 text-sky-700" />
+                      <span className="text-sm text-slate-800">can edit</span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
 
-              <Input
-                type="email"
-                placeholder="이메일 입력"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="flex-1 bg-white border-gray-300"
-                onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
-              />
+                <Input
+                  type="email"
+                  placeholder="이메일 입력"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="flex-1 bg-white border-slate-300 text-sm"
+                  onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
+                />
 
-              <Button
-                onClick={handleInvite}
-                disabled={!email.trim()}
-                className="bg-gray-600 hover:bg-gray-700 text-white px-4"
-              >
-                초대하기
-              </Button>
+                <Button
+                  onClick={handleInvite}
+                  disabled={!email.trim()}
+                  className="bg-sky-600 hover:bg-sky-700 text-white px-4"
+                >
+                  초대하기
+                </Button>
+              </div>
             </div>
 
-
             {/* 팀원 목록 */}
-            <div className="space-y-2">
-              <h4 className="text-gray-900">팀원</h4>
+            <div className="space-y-3">
+              <h4 className="text-slate-900 text-sm font-semibold">팀원</h4>
               {teamMembers.map((member) => (
-                <div key={member.id} className="flex items-center justify-between">
-                  <span className="text-gray-800">
-                    {member.name}{member.isMe && '(나)'}
-                  </span>
+                <div key={member.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3.5 py-2.5">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-8 w-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-semibold">
+                      {member.name.slice(0, 2)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-slate-900 text-sm truncate">{member.name}{member.isMe && ' (나)'}</div>
+                      <div className="text-slate-500 text-xs truncate">{member.email}</div>
+                    </div>
+                  </div>
                   {member.role === 'owner' ? (
-                    <Badge className={getRoleColor(member.role)}>
-                      {member.role}
-                    </Badge>
+                    <Badge className={`${getRoleColor(member.role)} border border-transparent text-xs px-2.5 py-1 rounded-md`}>{member.role}</Badge>
                   ) : (
                     <Select
                       value={member.role}
                       onValueChange={(value) => handleTeamMemberRoleChange(member.id, value)}
                     >
-                      <SelectTrigger className="w-28 bg-gray-200 border-none text-sm">
-                        <SelectValue />
+                      <SelectTrigger className="w-36 h-8 rounded-lg bg-white border border-sky-200/80 text-sky-800 text-xs shadow-sm hover:bg-sky-50 focus:ring-2 focus:ring-sky-300/50">
+                        <SelectValue placeholder="권한" />
                       </SelectTrigger>
-                      <SelectContent className="bg-white">
-                        <SelectItem value="can view">can view</SelectItem>
-                        <SelectItem value="can edit">can edit</SelectItem>
+                      <SelectContent className="bg-white rounded-lg border border-slate-200 shadow-xl p-1">
+                        <SelectItem value="can view" className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-sky-50 focus:bg-sky-50 cursor-pointer">
+                          <Eye className="w-4 h-4 text-sky-600" />
+                          <span className="text-sm text-slate-800">can view</span>
+                        </SelectItem>
+                        <SelectItem value="can edit" className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-sky-50 focus:bg-sky-50 cursor-pointer">
+                          <Pencil className="w-4 h-4 text-sky-700" />
+                          <span className="text-sm text-slate-800">can edit</span>
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   )}
@@ -152,7 +173,7 @@ export function InviteModal({ open, onOpenChange }: InviteModalProps) {
           </div>
 
           {showCopyAlert && (
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-md text-sm shadow-lg">
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-4 py-2 rounded-lg text-xs shadow-lg ring-1 ring-black/5">
               URL 링크가 복사되었습니다
             </div>
           )}

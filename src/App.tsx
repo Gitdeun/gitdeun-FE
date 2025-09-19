@@ -4,7 +4,6 @@ import Home from "./pages/home/Home";
 import Login from "./pages/login/Login";
 import Mindmap from "./pages/mindmap/Map";
 import Code from "./pages/code/Code";
-import Meeting from "./pages/meeting/MeetingRoom";
 import NewPost from "./pages/post/NewPost";
 import PostList from "./pages/post/PostList.tsx";
 import DetailPost from "./pages/post/DetailPost";
@@ -21,15 +20,16 @@ function App() {
       <Route element={<Layout />}>
         <Route path="login" element={<Login />} />
         <Route path="home" element={<Home />} />
-        <Route path="mindmap" element={<Mindmap />} />
         <Route path="code" element={<Code />} />
-        <Route path="meeting" element={<Meeting />} />
+        <Route path="mindmap" element={<Mindmap />} />
         <Route path="posts" element={<PostList />}/>
         <Route path="post/new" element={<NewPost />}/>
         <Route path="post/:id" element={<DetailPost />} />
         <Route path="mypage" element={<MyPage />} />
       </Route>
+      <Route path="mindmap/:id" element={<Mindmap />} />
     </Routes>
+
 
   );
 }
