@@ -1,154 +1,355 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import go from 'gojs';
-import { Header } from "../../components/mindmap/Header";
-// CodeViewer import는 더 이상 필요하지 않습니다.
-import { InviteModal } from "../../components/modal/InviteModal";
-import { toast } from "sonner";
-import type { Mindmap as MindmapType } from '../../types';
+import { toast } from 'sonner';
+import {InviteModal} from "../../components/modal/InviteModal.tsx";
 
-export interface Mindmap extends MindmapType {
-  data: MindMapDataNode;
+const Header: React.FC<{ projectName: string; onBack: () => void; onInvite: () => void; onLeave: () => void; }> = ({ projectName, onBack, onInvite }) => (
+    <header className="px-4 py-3 border-b bg-white/90 backdrop-blur">
+        <div className="max-w-[1600px] mx-auto flex items-center justify-between">
+            <div className="flex items-center">
+                <h1 className="text-lg font-bold text-neutral-800 tracking-tight">{projectName}</h1>
+            </div>
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={onInvite}
+                    className="px-4 py-1.5 text-sm font-semibold rounded-lg border border-sky-300 text-sky-700 bg-transparent hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-300/60 transition-colors"
+                >
+                    초대하기
+                </button>
+                <button
+                    onClick={onBack}
+                    className="px-4 py-1.5 text-sm font-semibold rounded-lg border border-sky-300 text-sky-700 bg-transparent hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-300/60 transition-colors"
+                    aria-label="목록으로 돌아가기"
+                >
+                    목록으로
+                </button>
+            </div>
+        </div>
+    </header>
+);
+type ChatMessage = { id: string; role: "user" | "assistant"; content: string; createdAt: string; };
+function ChatPanel() {
+    const [input, setInput] = useState("");
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [isSending, setIsSending] = useState(false);
+    const listRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
+    }, [messages]);
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); }
+    };
+    const sendAiMessage = async (prompt: string): Promise<string> => {
+        await new Promise((r) => setTimeout(r, 600));
+        return `예시 응답: “${prompt.slice(0, 80)}${prompt.length > 80 ? "…" : ""}” 에 대한 가이드입니다.`;
+    };
+    const send = async () => {
+        const content = input.trim();
+        if (!content || isSending) return;
+        setIsSending(true);
+        const userMsg: ChatMessage = { id: `user-${Date.now()}`, role: "user", content, createdAt: new Date().toISOString() };
+        setMessages((prev) => [...prev, userMsg]);
+        setInput("");
+        try {
+            const answer = await sendAiMessage(content);
+            const aiMsg: ChatMessage = { id: `ai-${Date.now()}`, role: "assistant", content: answer, createdAt: new Date().toISOString() };
+            setMessages((prev) => [...prev, aiMsg]);
+        } catch (err) {
+            console.error(err);
+            toast.error("AI 응답 중 오류가 발생했습니다.");
+        } finally {
+            setIsSending(false);
+        }
+    };
+    return (
+        <div className="w-full min-w-0 max-w-full h-full border-l border-neutral-200 flex flex-col bg-white">
+            <div className="px-4 py-3.5 border-b border-neutral-200 bg-white/80 backdrop-blur sticky top-0 z-10"><div className="text-sm font-semibold text-sky-700">AI Chat</div></div>
+            <div ref={listRef} className="flex-1 overflow-y-auto p-4 space-y-4" aria-live="polite">
+                {messages.map((m) => (<div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}><div className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 shadow-sm ring-1 ${m.role === "user" ? "bg-sky-500 text-white ring-sky-500/30 rounded-br-lg" : "bg-neutral-100 text-neutral-800 ring-neutral-200 rounded-bl-lg"}`}><p>{m.content}</p><div className="mt-1.5 text-right text-[11px] opacity-60">{new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div></div></div>))}
+                {isSending && (<div className="flex justify-start"><div className="rounded-2xl rounded-bl-lg px-4 py-2.5 shadow-sm ring-1 bg-neutral-100 text-neutral-900 ring-neutral-200"><span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-sky-400 animate-pulse"></span><span className="h-2 w-2 rounded-full bg-sky-400 animate-pulse [animation-delay:120ms]"></span><span className="h-2 w-2 rounded-full bg-sky-400 animate-pulse [animation-delay:240ms]"></span></span></div></div>)}
+            </div>
+            <div className="border-t border-neutral-200 p-4 bg-white">
+                <div className="rounded-xl border border-neutral-300 focus-within:ring-2 focus-within:ring-sky-400 shadow-sm transition-all">
+                    <textarea className="w-full bg-transparent resize-none p-3 text-sm outline-none h-24 placeholder:text-neutral-400" placeholder="AI에게 질문해보세요… (Shift+Enter 줄바꿈)" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} disabled={isSending} />
+                </div>
+                <div className="flex justify-between items-center mt-2.5">
+                    <div className="text-[12px] text-neutral-500">Enter: 전송 · Shift+Enter: 줄바꿈</div>
+                    <button onClick={() => void send()} disabled={isSending || !input.trim()} className="px-4 py-1.5 text-sm font-semibold rounded-lg bg-gradient-to-r from-sky-500 to-sky-600 text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:from-sky-600 hover:to-sky-700 active:scale-[0.98] transition-all" aria-label="Send message">{isSending ? "전송 중…" : "전송 ✈️"}</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+
+export interface Mindmap {
+    id: number;
+    title: string;
+    data: MindMapDataNode;
+    link?: string;
+    updated?: string;
+    pinned?: boolean;
+    eta?: string;
 }
 
 interface MindMapDataNode {
-  node: string;
-  related_files: string[];
-  children?: MindMapDataNode[];
+    node: string;
+    related_files?: string[];
+    children?: MindMapDataNode[];
 }
 
-interface GoJSNodeData extends go.ObjectData {
-  key: number;
-  text: string;
-  files: string;
-  fill: string;
-  originalData: MindMapDataNode & { key: number };
-}
 
-// mockCode 상수를 제거했습니다.
+const transformDataForMindMapSample = (data: MindMapDataNode) => {
+    const nodeDataArray: go.ObjectData[] = [];
+    let keyCounter = 0;
+    const branchColors = ["#51a1e6", "#66d456", "#e57373", "#ff8a65", "#ba68c8", "#90a4ae"];
+    type Direction = 'left' | 'right';
 
-const transformDataForGoJS = (data: MindMapDataNode) => {
-  const nodes: GoJSNodeData[] = [];
-  const links: { from: number; to: number }[] = [];
-  let keyCounter = 0;
-
-  const traverse = (node: MindMapDataNode, parentKey: number | null) => {
-    const currentKey = keyCounter++;
-    nodes.push({
-      key: currentKey,
-      text: node.node,
-      files: node.related_files.join('\n'),
-      fill: parentKey === null ? "#1E90FF" : (node.children && node.children.length > 0 ? "#38BDF8" : "#93C5FD"),
-      originalData: { ...node, key: currentKey }
-    });
-    if (parentKey !== null) {
-      links.push({ from: parentKey, to: currentKey });
+    function traverse(node: MindMapDataNode, parentKey: number | null, dir: Direction | null, brush: string) {
+        const currentKey = keyCounter++;
+        const nodeData: go.ObjectData = {
+            key: currentKey,
+            ...(parentKey !== null && { parent: parentKey }),
+            text: node.node,
+            brush: brush,
+            dir: dir,
+        };
+        if (parentKey === null) {
+            nodeData.category = "Root";
+        }
+        nodeDataArray.push(nodeData);
+        node.children?.forEach((child, index) => {
+            if (parentKey === null) {
+                const newBrush = branchColors[index % branchColors.length];
+                const newDir: Direction = index % 2 === 0 ? 'right' : 'left';
+                traverse(child, currentKey, newDir, newBrush);
+            } else {
+                traverse(child, currentKey, dir, brush);
+            }
+        });
     }
-    if (node.children) {
-      node.children.forEach((child: MindMapDataNode) => traverse(child, currentKey));
-    }
-  };
-
-  traverse(data, null);
-  return { nodes, links };
+    traverse(data, null, null, 'black');
+    return nodeDataArray;
 };
 
-export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBack: () => void }) {
-  const [selectedNode, setSelectedNode] = useState<(MindMapDataNode & { key: number }) | null>(null);
-  // selectedFile 상태를 제거했습니다.
-  const [inviteModalOpen, setInviteModalOpen] = useState(false);
-  const diagramRef = useRef<HTMLDivElement>(null);
-  const diagramInstance = useRef<go.Diagram | null>(null);
 
-  const handleNodeClick = (node: MindMapDataNode & { key: number }) => {
-    if (selectedNode?.key === node.key) {
-      setSelectedNode(null);
-    } else {
-      setSelectedNode(node);
-      // selectedFile을 설정하는 로직을 제거했습니다.
-    }
-  };
+// =================================================================
+// 🗺️ 메인 마인드맵 뷰 컴포넌트
+// =================================================================
+export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBack: () => void; }) {
+    const diagramRef = useRef<HTMLDivElement>(null);
+    const diagramInstance = useRef<go.Diagram | null>(null);
+    const [inviteModalOpen, setInviteModalOpen] = useState(false);
 
-  const handleInvite = () => setInviteModalOpen(true);
-  const handleLeave = () => {
-    if (confirm("정말로 프로젝트를 나가시겠습니까?")) {
-      toast.info("프로젝트에서 나갔습니다.");
-    }
-  };
+    useEffect(() => {
+        if (!diagramRef.current || diagramInstance.current) return;
+        const myDiagram = new go.Diagram(diagramRef.current, {
+            'commandHandler.copiesTree': true,
+            'commandHandler.copiesParentKey': true,
+            'commandHandler.deletesTree': true,
+            'draggingTool.dragsTree': true,
+            'undoManager.isEnabled': true,
+            initialContentAlignment: go.Spot.Center,
+        });
+        diagramInstance.current = myDiagram;
 
-  useEffect(() => {
-    if (!diagramRef.current || !mindmap.data) return;
-    const $ = go.GraphObject.make;
-    const diagram = $(go.Diagram, diagramRef.current, {
-      'undoManager.isEnabled': true,
-      initialAutoScale: go.Diagram.Uniform,
-      layout: $(go.ForceDirectedLayout, {
-        defaultSpringLength: 50,
-        defaultElectricalCharge: 150,
-        maxIterations: 500,
-      }),
-    });
-
-    diagram.nodeTemplate = $(go.Node, "Auto", {
-      click: (_e, obj) => {
-        const node = obj.part as go.Node;
-        const nodeData = node.data as GoJSNodeData;
-        if (nodeData?.originalData) {
-          handleNodeClick(nodeData.originalData);
+        // --- GoJS 헬퍼 함수들 ---
+        function spotConverter(dir: string, from: boolean) {
+            if (dir === 'left') return from ? go.Spot.Left : go.Spot.Right;
+            if (dir === 'right') return from ? go.Spot.Right : go.Spot.Left;
+            return from ? go.Spot.Right : go.Spot.Left;
         }
-      },
-      toolTip: $(go.Adornment, "Auto",
-        $(go.TextBlock, { margin: 4, textAlign: "left" }, new go.Binding("text", "files"))
-      ),
-    },
-      new go.Binding("stroke", "isSelected", sel => sel ? "dodgerblue" : "transparent").ofObject(),
-      new go.Binding("strokeWidth", "isSelected", sel => sel ? 4 : 0).ofObject(),
-      $(go.Shape, "RoundedRectangle", { strokeWidth: 0 }, new go.Binding("fill", "fill")),
-      $(go.TextBlock, { margin: 12, stroke: "white", font: "bold 16px sans-serif" }, new go.Binding("text", "text"))
-    );
 
-    diagram.linkTemplate = $(go.Link, $(go.Shape, { strokeWidth: 2, stroke: "#a0a0a0" }));
+        function addNodeAndLink(_e: go.InputEvent, obj: go.GraphObject) {
+            const adorn = obj.part as go.Adornment;
+            if (!adorn) return;
+            const oldnode = adorn.adornedPart as go.Node;
+            if (!oldnode) return;
+            myDiagram.startTransaction('Add Node');
+            const olddata = oldnode.data;
+            let newDir = olddata.dir;
+            if (olddata.category === "Root") {
+                const childCount = oldnode.findTreeChildrenNodes().count;
+                newDir = childCount % 2 === 0 ? 'right' : 'left';
+            }
+            const newdata = { text: 'idea', brush: olddata.brush, dir: newDir, parent: olddata.key };
+            (myDiagram.model as go.TreeModel).addNodeData(newdata);
+            layoutTree(oldnode);
+            myDiagram.commitTransaction('Add Node');
+            const newnode = myDiagram.findNodeForData(newdata);
+            if (newnode) myDiagram.scrollToRect(newnode.actualBounds);
+        }
 
-    const { nodes, links } = transformDataForGoJS(mindmap.data);
-    diagram.model = new go.GraphLinksModel(nodes, links);
-    diagramInstance.current = diagram;
+        function changeTextSize(obj: go.GraphObject, factor: number) {
+            const adorn = obj.part as go.Adornment; if (!adorn?.diagram) return;
+            adorn.diagram.startTransaction('Change Text Size');
+            const node = adorn.adornedPart; if (!node) { adorn.diagram.commitTransaction('Change Text Size'); return; }
+            const tb = node.findObject('TEXT') as go.TextBlock; tb.scale *= factor;
+            adorn.diagram.commitTransaction('Change Text Size');
+        }
+        function toggleTextWeight(obj: go.GraphObject) {
+            const adorn = obj.part as go.Adornment; if (!adorn?.diagram) return;
+            adorn.diagram.startTransaction('Change Text Weight');
+            const node = adorn.adornedPart; if (!node) { adorn.diagram.commitTransaction('Change Text Weight'); return; }
+            const tb = node.findObject('TEXT') as go.TextBlock; const idx = tb.font.indexOf('bold');
+            if (idx < 0) tb.font = 'bold ' + tb.font; else tb.font = tb.font.slice(idx + 5);
+            adorn.diagram.commitTransaction('Change Text Weight');
+        }
+        function updateNodeDirection(node: go.Node, dir: string) {
+            myDiagram.model.setDataProperty(node.data, 'dir', dir);
+            const chl = node.findTreeChildrenNodes(); while (chl.next()) { updateNodeDirection(chl.value, dir); }
+        }
+        function layoutAll() {
+            const root = myDiagram.findTreeRoots().first(); if (root === null) return;
+            myDiagram.startTransaction('Layout');
+            const rightward = new go.Set<go.Part>(); const leftward = new go.Set<go.Part>();
+            root.findLinksConnected().each((link) => {
+                const child = link.toNode; if (!child) return;
+                if (child.data.dir === 'left') { leftward.add(root).add(link).addAll(child.findTreeParts()); }
+                else { rightward.add(root).add(link).addAll(child.findTreeParts()); }
+            });
+            layoutAngle(rightward, 0); layoutAngle(leftward, 180);
+            myDiagram.commitTransaction('Layout');
+        }
+        function layoutTree(node: go.Node) {
+            if (node.isTreeRoot) layoutAll();
+            else { layoutAngle(node.findTreeParts(), node.data.dir === 'left' ? 180 : 0); }
+        }
+        function layoutAngle(parts: go.Set<go.Part>, angle: number) {
+            const layout = new go.TreeLayout({ angle, arrangement: go.TreeArrangement.FixedRoots, nodeSpacing: 5, layerSpacing: 20, setsPortSpot: false, setsChildPortSpot: false });
+            layout.doLayout(parts);
+        }
 
-    if (nodes.length > 0) {
-      handleNodeClick(nodes[0].originalData);
-    }
+        // 일반 노드 템플릿
+        myDiagram.nodeTemplate = new go.Node('Vertical', { selectionObjectName: 'TEXT' })
+            .bindTwoWay('location', 'loc', go.Point.parse, go.Point.stringify)
+            .bind('locationSpot', 'dir', (d) => spotConverter(d, false))
+            .add(
+                new go.TextBlock({ name: 'TEXT', minSize: new go.Size(30, 15), editable: true, font: '16px Inter, sans-serif' }).bindTwoWay('text').bindTwoWay('scale').bindTwoWay('font'),
+                new go.Shape('LineH', { stretch: go.Stretch.Horizontal, strokeWidth: 3, height: 3, portId: '', fromSpot: go.Spot.LeftRightSides, toSpot: go.Spot.LeftRightSides })
+                    .bind('stroke', 'brush').bind('fromSpot', 'dir', (d) => spotConverter(d, true)).bind('toSpot', 'dir', (d) => spotConverter(d, false))
+            );
 
-    return () => {
-      if (diagram.div) diagram.div = null;
+        // 루트 노드 전용 템플릿
+        myDiagram.nodeTemplateMap.add("Root",
+            new go.Node("Auto", {
+                selectionObjectName: "TEXT",
+                locationSpot: go.Spot.Center,
+                // 1. 그림자 효과
+                shadowVisible: true,
+                shadowBlur: 10,
+                shadowColor: "rgba(0, 0, 0, .15)",
+                shadowOffset: new go.Point(3, 3),
+            })
+            .bindTwoWay('location', 'loc', go.Point.parse, go.Point.stringify)
+            .add(
+                new go.Shape("RoundedRectangle", {
+                    // 2. 그라데이션 배경
+                    fill: new go.Brush("Linear", { 0: "#F8F9FA", 1: "#E9ECEF" }),
+                    portId: "",
+                    fromSpot: go.Spot.AllSides,
+                    toSpot: go.Spot.AllSides,
+                    // 3. 테두리 스타일
+                    stroke: "#ADB5BD",
+                    strokeWidth: 1.5,
+                }),
+                new go.TextBlock({
+                    name: "TEXT",
+                    font: "bold 18px Inter, sans-serif",
+                    stroke: "#212529",
+                    margin: 12,
+                    editable: true,
+                }).bindTwoWay("text")
+            )
+        );
+
+        const selectionAdornmentTemplate = new go.Adornment('Spot')
+            .add(
+                new go.Panel('Auto').add(new go.Shape({ fill: null, stroke: 'dodgerblue', strokeWidth: 3 }), new go.Placeholder({ margin: new go.Margin(4, 4, 0, 4) })),
+                go.GraphObject.build('Button', {
+                    alignment: go.Spot.Right,
+                    alignmentFocus: go.Spot.Left,
+                    click: addNodeAndLink
+                }).add(new go.TextBlock('+', { font: 'bold 12pt sans-serif' }))
+            );
+        myDiagram.nodeTemplate.selectionAdornmentTemplate = selectionAdornmentTemplate;
+        myDiagram.nodeTemplateMap.get("Root")!.selectionAdornmentTemplate = selectionAdornmentTemplate;
+
+
+        myDiagram.nodeTemplate.contextMenu = go.GraphObject.build('ContextMenu')
+            .add(
+                go.GraphObject.build('ContextMenuButton', { click: (_e, obj) => changeTextSize(obj, 1.1) }).add(new go.TextBlock('Bigger')),
+                go.GraphObject.build('ContextMenuButton', { click: (_e, obj) => changeTextSize(obj, 1 / 1.1) }).add(new go.TextBlock('Smaller')),
+                go.GraphObject.build('ContextMenuButton', { click: (_e, obj) => toggleTextWeight(obj) }).add(new go.TextBlock('Bold/Normal')),
+                go.GraphObject.build('ContextMenuButton', { click: (e) => {
+                    const selectedNode = e.diagram.selection.first() as go.Node;
+                    if (selectedNode) layoutTree(selectedNode);
+                }}).add(new go.TextBlock('Layout'))
+            );
+
+        myDiagram.linkTemplate = new go.Link({ curve: go.Curve.Bezier, fromShortLength: -2, toShortLength: -2, selectable: false })
+            .add(new go.Shape({ strokeWidth: 3 }).bind('stroke', 'brush', (brush, link) => (link as go.Link).toNode?.data.brush || brush));
+
+        myDiagram.addDiagramListener('SelectionMoved', () => {
+            const root = myDiagram.findNodeForKey(0);
+            if (!root) return;
+            const rootPt = root.location;
+            myDiagram.selection.each((node) => {
+                if (!(node instanceof go.Node) || node.data.parent !== 0) return;
+                const nodePt = node.location;
+                const dx = nodePt.x - rootPt.x;
+                const dir = dx > 0 ? 'right' : 'left';
+                if (node.data.dir !== dir) updateNodeDirection(node, dir);
+                layoutTree(node);
+            });
+        });
+
+        const nodeDataArray = transformDataForMindMapSample(mindmap.data);
+        myDiagram.model = new go.TreeModel(nodeDataArray);
+        layoutAll();
+
+        // 초기 표시를 조금 더 크게 보이도록 설정
+        // 먼저 확대 비율을 올리고, 루트 노드 기준으로 화면 중앙 정렬
+        myDiagram.scale = 1.2; // 필요에 따라 1.1~1.4 사이로 조정 가능
+        const rootForCenter = myDiagram.findTreeRoots().first();
+        if (rootForCenter) {
+            myDiagram.centerRect(rootForCenter.actualBounds);
+        } else {
+            // 루트가 없을 경우 문서 전체를 중앙에 배치
+            myDiagram.centerRect(myDiagram.documentBounds);
+        }
+
+        return () => {
+            if (diagramInstance.current) {
+                diagramInstance.current.div = null;
+                diagramInstance.current = null;
+            }
+        };
+    }, [mindmap]);
+
+    const handleInvite = () => setInviteModalOpen(true);
+    const handleLeave = () => {
+        if (window.confirm("정말로 프로젝트를 나가시겠습니까?")) { toast.info("프로젝트에서 나갔습니다."); }
     };
-  }, [mindmap]);
 
-  useEffect(() => {
-    if (diagramInstance.current) {
-      diagramInstance.current.select(diagramInstance.current.findNodeForKey(selectedNode?.key));
-    }
-  }, [selectedNode]);
-
-  return (
-    <div className="h-screen flex flex-col bg-background">
-      <Header
-        projectName={mindmap.title}
-        onInvite={handleInvite}
-        onLeave={handleLeave}
-      />
-      <div className="flex-1 flex overflow-hidden">
-        <div className="flex flex-col flex-1">
-          <button onClick={onBack} className="m-4 p-2 bg-gray-200 rounded-lg self-start hover:bg-gray-300 transition-colors shadow">
-            &larr; 목록으로 돌아가기
-          </button>
-          <div ref={diagramRef} className="flex-1" />
+    return (
+        <div className="h-screen flex flex-col bg-gradient-to-b from-slate-50 to-slate-100">
+            <Header projectName={mindmap.title} onBack={onBack} onInvite={handleInvite} onLeave={handleLeave} />
+            <div className="flex-1 flex overflow-hidden">
+                <div className="relative flex flex-col flex-1">
+                    {/* Diagram surface container */}
+                    <div className="flex-1 p-2 md:p-2.5 lg:p-3.5">
+                        <div className="h-full w-full bg-white rounded-xl border border-neutral-200 shadow">
+                            <div ref={diagramRef} className="h-full w-full rounded-xl" />
+                        </div>
+                    </div>
+                </div>
+                <div className="border-l border-neutral-200 bg-white/70 backdrop-blur-sm w-[380px] min-w-[320px] max-w-[460px]">
+                    <ChatPanel />
+                </div>
+            </div>
+            <InviteModal open={inviteModalOpen} onOpenChange={setInviteModalOpen} />
         </div>
-        {/* CodeViewer 컴포넌트 렌더링 부분을 완전히 제거했습니다. */}
-      </div>
-      <InviteModal
-        open={inviteModalOpen}
-        onOpenChange={setInviteModalOpen}
-      />
-    </div>
-  );
+    );
 }
 
-export default MindmapDetailView;
