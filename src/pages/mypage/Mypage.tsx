@@ -84,7 +84,6 @@ export function MyPage() {
     <div className="min-h-screen p-6 bg-gradient-to-br from-sky-50 to-blue-100">
       <div className="mx-auto max-w-7xl">
         <div className="py-8 text-center">
-          <h1 className="mb-2 text-sky-800">마이페이지</h1>
           <p className="text-sky-600">프로필 정보를 확인하고 관심 언어를 관리하세요</p>
         </div>
 
@@ -160,14 +159,26 @@ export function MyPage() {
               </CardHeader>
               <CardContent>
                 <Tabs defaultValue="my-posts" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2 border bg-sky-100/50 border-sky-200">
-                    <TabsTrigger value="my-posts" className="data-[state=active]:bg-sky-500 data-[state=active]:text-white text-sky-700">
-                      <FileText className="w-4 h-4 mr-2" />
-                      작성한 공고
+                  <TabsList className="mx-auto max-w-md flex items-center w-full rounded-full p-1 h-12 bg-white shadow-sm border border-sky-200 gap-1">
+                    <TabsTrigger
+                      value="my-posts"
+                      className="flex-1 flex h-full items-center justify-center gap-2 rounded-full px-4 text-sky-700 leading-none data-[state=active]:bg-sky-500 data-[state=active]:text-white"
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span className="font-medium">작성한 공고</span>
+                      <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 text-[11px] font-semibold rounded-full bg-sky-100 text-sky-700 data-[state=active]:bg-white/30 data-[state=active]:text-white">
+                        {myRecruitments.length}
+                      </span>
                     </TabsTrigger>
-                    <TabsTrigger value="applied" className="data-[state=active]:bg-sky-500 data-[state=active]:text-white text-sky-700">
-                      <Send className="w-4 h-4 mr-2" />
-                      신청한 공고
+                    <TabsTrigger
+                      value="applied"
+                      className="flex-1 flex h-full items-center justify-center gap-2 rounded-full px-4 text-sky-700 leading-none data-[state=active]:bg-sky-500 data-[state=active]:text-white"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span className="font-medium">신청한 공고</span>
+                      <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 text-[11px] font-semibold rounded-full bg-sky-100 text-sky-700 data-[state=active]:bg-white/30 data-[state=active]:text-white">
+                        {appliedRecruitments.length}
+                      </span>
                     </TabsTrigger>
                   </TabsList>
 

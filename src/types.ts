@@ -105,13 +105,18 @@ export type mindmapComment = {
   reactions: Record<string, number>;
 }
 
-export type Mindmap = {
+export interface Mindmap {
   id: number;
-  link: string;
   title: string;
-  updated: string;
+  data: MindMapDataNode;
+  link?: string;
+  updated?: string;
   pinned?: boolean;
   eta?: string;
-  type: '개발용' | '확인용';
-};
+}
 
+export interface MindMapDataNode {
+  node: string;
+  related_files?: string[];
+  children?: MindMapDataNode[];
+}
