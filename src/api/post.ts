@@ -12,6 +12,7 @@ export type RecruitmentRequest = {
   languageTags: string[];
 };
 
+// 모집 공고 작성
 export const createRecruitment = async (
   requestDto: RecruitmentRequest,
   images: File[]

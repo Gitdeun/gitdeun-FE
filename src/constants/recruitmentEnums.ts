@@ -1,3 +1,4 @@
+// constants/recruitmentEnums.ts
 export const AREA_MAP: Record<string, string> = {
   "프론트엔드": "FRONTEND",
   "백엔드": "BACKEND",
