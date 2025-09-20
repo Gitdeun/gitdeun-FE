@@ -5,6 +5,7 @@ import {InviteModal} from "../../components/modal/InviteModal.tsx";
 import type {Mindmap, MindMapDataNode} from "../../types";
 import { Header } from './Header';
 import { ChatPanel } from './ChatPanel';
+import { updateMindmapTitle, deleteMindmap } from '../../api/mindmap';
 
 
 const transformDataForMindMapSample = (data: MindMapDataNode) => {
@@ -44,7 +45,11 @@ const transformDataForMindMapSample = (data: MindMapDataNode) => {
 export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBack: () => void; }) {
     const diagramRef = useRef<HTMLDivElement>(null);
     const diagramInstance = useRef<go.Diagram | null>(null);
+    const overviewRef = useRef<HTMLDivElement>(null);
+    const overviewInstance = useRef<go.Overview | null>(null);
     const [inviteModalOpen, setInviteModalOpen] = useState(false);
+    const [title, setTitle] = useState(mindmap.title);
+    useEffect(() => { setTitle(mindmap.title); }, [mindmap.title]);
 
     useEffect(() => {
         if (!diagramRef.current || diagramInstance.current) return;
@@ -57,6 +62,9 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
             initialContentAlignment: go.Spot.Center,
         });
         diagramInstance.current = myDiagram;
+
+        // 마우스 휠 중심 확대 활성화
+        myDiagram.toolManager.mouseWheelBehavior = go.ToolManager.WheelZoom;
 
         // --- GoJS 헬퍼 함수들 ---
         function spotConverter(dir: string, from: boolean) {
@@ -130,7 +138,16 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
             .bindTwoWay('location', 'loc', go.Point.parse, go.Point.stringify)
             .bind('locationSpot', 'dir', (d) => spotConverter(d, false))
             .add(
-                new go.TextBlock({ name: 'TEXT', minSize: new go.Size(30, 15), editable: true, font: '16px Inter, sans-serif' }).bindTwoWay('text').bindTwoWay('scale').bindTwoWay('font'),
+                new go.TextBlock({
+                    name: 'TEXT',
+                    minSize: new go.Size(30, 15),
+                    editable: true,
+                    font: '16px Inter, sans-serif',
+                    maxLines: 2,
+                    overflow: go.TextOverflow.Ellipsis,
+                    toolTip: go.GraphObject.build('ToolTip').add(new go.TextBlock({ margin: 6 }).bind('text')),
+                })
+                  .bindTwoWay('text').bindTwoWay('scale').bindTwoWay('font'),
                 new go.Shape('LineH', { stretch: go.Stretch.Horizontal, strokeWidth: 3, height: 3, portId: '', fromSpot: go.Spot.LeftRightSides, toSpot: go.Spot.LeftRightSides })
                     .bind('stroke', 'brush').bind('fromSpot', 'dir', (d) => spotConverter(d, true)).bind('toSpot', 'dir', (d) => spotConverter(d, false))
             );
@@ -162,6 +179,9 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                     stroke: "#212529",
                     margin: 12,
                     editable: true,
+                    maxLines: 2,
+                    overflow: go.TextOverflow.Ellipsis,
+                    toolTip: go.GraphObject.build('ToolTip').add(new go.TextBlock({ margin: 6 }).bind('text')),
                 }).bindTwoWay("text")
             )
         );
@@ -184,6 +204,8 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                 go.GraphObject.build('ContextMenuButton', { click: (_e, obj) => changeTextSize(obj, 1.1) }).add(new go.TextBlock('Bigger')),
                 go.GraphObject.build('ContextMenuButton', { click: (_e, obj) => changeTextSize(obj, 1 / 1.1) }).add(new go.TextBlock('Smaller')),
                 go.GraphObject.build('ContextMenuButton', { click: (_e, obj) => toggleTextWeight(obj) }).add(new go.TextBlock('Bold/Normal')),
+                go.GraphObject.build('ContextMenuButton', { click: (e) => { const n = e.diagram.selection.first() as go.Node; if (n) e.diagram.commandHandler.collapseTree(n); } }).add(new go.TextBlock('Collapse subtree')),
+                go.GraphObject.build('ContextMenuButton', { click: (e) => { const n = e.diagram.selection.first() as go.Node; if (n) e.diagram.commandHandler.expandTree(n); } }).add(new go.TextBlock('Expand subtree')),
                 go.GraphObject.build('ContextMenuButton', { click: (e) => {
                     const selectedNode = e.diagram.selection.first() as go.Node;
                     if (selectedNode) layoutTree(selectedNode);
@@ -211,18 +233,48 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
         myDiagram.model = new go.TreeModel(nodeDataArray);
         layoutAll();
 
-        myDiagram.scale = 1.2; 
-        const rootForCenter = myDiagram.findTreeRoots().first();
-        if (rootForCenter) {
-            myDiagram.centerRect(rootForCenter.actualBounds);
-        } else {
-            myDiagram.centerRect(myDiagram.documentBounds);
+        // 초기에는 루트 2레벨 이하 접기
+        myDiagram.nodes.each((n) => {
+            if (n.findTreeLevel() >= 2) {
+                (myDiagram.model as go.TreeModel).setDataProperty(n.data, 'isTreeExpanded', false);
+            }
+        });
+
+        // 화면에 맞춤 및 약간 여백
+        myDiagram.zoomToFit();
+        myDiagram.scale = myDiagram.scale * 1.05;
+
+        // 선택 서브트리 외 영역 흐리게
+        myDiagram.addDiagramListener('ChangedSelection', () => {
+            const sel = myDiagram.selection.first() as go.Node | null;
+            if (!sel) {
+                myDiagram.nodes.each(n => (n.opacity = 1));
+                myDiagram.links.each(l => (l.opacity = 1));
+                return;
+            }
+            const visible = new go.Set<go.Part>();
+            visible.add(sel);
+            sel.findTreeParts().each(p => visible.add(p));
+            myDiagram.nodes.each(n => { n.opacity = visible.contains(n) ? 1 : 0.3; });
+            myDiagram.links.each(l => { l.opacity = visible.contains(l) ? 1 : 0.15; });
+        });
+
+        // 미니맵 (중복 생성 방지)
+        if (overviewRef.current && !overviewInstance.current) {
+            overviewInstance.current = new go.Overview(overviewRef.current);
+            overviewInstance.current.observed = myDiagram;
         }
 
+        // cleanup
         return () => {
             if (diagramInstance.current) {
                 diagramInstance.current.div = null;
                 diagramInstance.current = null;
+            }
+            if (overviewInstance.current) {
+                overviewInstance.current.observed = null as unknown as go.Diagram;
+                overviewInstance.current.div = null as unknown as HTMLDivElement;
+                overviewInstance.current = null;
             }
         };
     }, [mindmap]);
@@ -232,15 +284,54 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
         if (window.confirm("정말로 프로젝트를 나가시겠습니까?")) { toast.info("프로젝트에서 나갔습니다."); }
     };
 
+    const handleRename = async (nextTitle: string) => {
+        try {
+            await updateMindmapTitle(mindmap.id, nextTitle);
+            setTitle(nextTitle);
+            toast.success('제목이 수정되었습니다.');
+        } catch (e: any) {
+            const msg = e?.response?.data?.message || e?.message || '제목 수정에 실패했습니다.';
+            toast.error(msg);
+            throw e;
+        }
+    };
+
     return (
         <div className="h-screen flex flex-col bg-gradient-to-b from-slate-50 to-slate-100">
-            <Header projectName={mindmap.title} onBack={onBack} onInvite={handleInvite} onLeave={handleLeave} />
+            <Header
+                projectName={title}
+                onBack={onBack}
+                onInvite={handleInvite}
+                onLeave={handleLeave}
+                onRename={handleRename}
+                onDelete={async () => {
+                    if (!window.confirm('정말 이 마인드맵을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
+                    try {
+                        await deleteMindmap(mindmap.id);
+                        toast.success('마인드맵이 삭제되었습니다.');
+                        onBack();
+                    } catch (e: any) {
+                        const msg = e?.response?.data?.message || e?.message || '마인드맵 삭제에 실패했습니다.';
+                        toast.error(msg);
+                    }
+                }}
+            />
             <div className="flex-1 flex overflow-hidden">
                 <div className="relative flex flex-col flex-1">
                     {/* Diagram surface container */}
                     <div className="flex-1 p-2 md:p-2.5 lg:p-3.5">
-                        <div className="h-full w-full bg-white rounded-xl border border-neutral-200 shadow">
+                        <div className="h-full w-full bg-white rounded-xl border border-neutral-200 shadow relative">
+                            {/* Zoom controls */}
+                            <div className="absolute top-3 right-3 z-10 flex gap-2">
+                                <button onClick={() => diagramInstance.current?.commandHandler.increaseZoom()} className="px-2.5 py-1.5 text-xs rounded-md bg-white/90 border shadow">+</button>
+                                <button onClick={() => diagramInstance.current?.commandHandler.decreaseZoom()} className="px-2.5 py-1.5 text-xs rounded-md bg-white/90 border shadow">-</button>
+                                <button onClick={() => diagramInstance.current?.zoomToFit()} className="px-2.5 py-1.5 text-xs rounded-md bg-white/90 border shadow">맞춤</button>
+                                <button onClick={() => { const d = diagramInstance.current; if (d) d.centerRect(d.documentBounds); }} className="px-2.5 py-1.5 text-xs rounded-md bg-white/90 border shadow">센터</button>
+                            </div>
+                            {/* Diagram canvas */}
                             <div ref={diagramRef} className="h-full w-full rounded-xl" />
+                            {/* Overview minimap */}
+                            <div ref={overviewRef} className="absolute bottom-3 right-3 w-48 h-32 bg-white/80 border border-neutral-200 rounded-lg shadow" />
                         </div>
                     </div>
                 </div>
