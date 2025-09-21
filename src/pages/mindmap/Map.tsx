@@ -172,12 +172,18 @@ const MindmapPage: React.FC = () => {
     try {
       if (pinnedIdSet.has(mindmapId)) {
         await unpinVisit(mindmapId);
+        const removed = pinned.find(p => p.mindmapId === mindmapId) || null;
         setPinned(prev => prev.filter(p => p.mindmapId !== mindmapId));
+        if (removed && !visitItems.some(v => v.mindmapId === mindmapId)) {
+          setVisitItems(prev => [removed, ...prev]);
+        }
         toast.success('핀 해제되었습니다.');
       } else {
         await pinVisit(mindmapId);
         const found = visitItems.find(v => v.mindmapId === mindmapId);
         if (found) setPinned(prev => [found, ...prev]);
+        // remove from main grid immediately
+        setVisitItems(prev => prev.filter(v => v.mindmapId !== mindmapId));
         toast.success('핀으로 등록되었습니다.');
       }
     } catch (e: any) {

@@ -11,6 +11,7 @@ import Layout from "./layouts/Layout";
 import OAuthCallback from "./pages/login/OAuthCallback";
 import { MyPage } from "./pages/mypage/Mypage.tsx";
 import { Toaster } from "sonner";
+import AcceptInvitation from "./pages/invitations/AcceptInvitation";
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
           <Route path="mypage" element={<MyPage />} />
         </Route>
         <Route path="mindmap/:id" element={<Mindmap />} />
+        <Route path="invitations/link/:token" element={<AcceptInvitation />} />
       </Routes>
     </>
   );

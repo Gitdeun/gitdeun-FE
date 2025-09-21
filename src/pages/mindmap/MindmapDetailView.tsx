@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import go from 'gojs';
 import { toast } from 'sonner';
 import {InviteModal} from "../../components/modal/InviteModal.tsx";
@@ -50,6 +51,9 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
     const [inviteModalOpen, setInviteModalOpen] = useState(false);
     const [title, setTitle] = useState(mindmap.title);
     useEffect(() => { setTitle(mindmap.title); }, [mindmap.title]);
+    const navigate = useNavigate();
+    const [hoverCard, setHoverCard] = useState<{ visible: boolean; left: number; top: number; text: string }>(() => ({ visible: false, left: 0, top: 0, text: '' }));
+  const hoverHideTimer = useRef<number | null>(null);
 
     useEffect(() => {
         if (!diagramRef.current || diagramInstance.current) return;
@@ -133,8 +137,34 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
             layout.doLayout(parts);
         }
 
+        // 헬퍼: 호버 카드 표시/숨김
+        function showHoverForNode(node: go.Node) {
+            if (!diagramRef.current || !diagramInstance.current) return;
+            const d = diagramInstance.current;
+            const ptDoc = node.getDocumentPoint(go.Spot.Top); // 상단 가까이
+            const ptView = d.transformDocToView(ptDoc);
+            if (hoverHideTimer.current) { window.clearTimeout(hoverHideTimer.current); hoverHideTimer.current = null; }
+            setHoverCard({ visible: true, left: ptView.x + 8, top: Math.max(8, ptView.y - 8), text: node.data?.text || '' });
+        }
+        function hideHoverDelayed() {
+            if (hoverHideTimer.current) window.clearTimeout(hoverHideTimer.current);
+            hoverHideTimer.current = window.setTimeout(() => {
+                setHoverCard((prev) => prev.visible ? { ...prev, visible: false } : prev);
+                hoverHideTimer.current = null;
+            }, 180);
+        }
+
         // 일반 노드 템플릿
-        myDiagram.nodeTemplate = new go.Node('Vertical', { selectionObjectName: 'TEXT' })
+        myDiagram.nodeTemplate = new go.Node('Vertical', {
+                selectionObjectName: 'TEXT',
+                mouseEnter: (e: go.InputEvent, obj: go.GraphObject) => {
+                    const n = obj.part as go.Node;
+                    if (n) showHoverForNode(n);
+                },
+                mouseLeave: (_e: go.InputEvent, _obj: go.GraphObject) => {
+                    hideHoverDelayed();
+                },
+            })
             .bindTwoWay('location', 'loc', go.Point.parse, go.Point.stringify)
             .bind('locationSpot', 'dir', (d) => spotConverter(d, false))
             .add(
@@ -145,7 +175,7 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                     font: '16px Inter, sans-serif',
                     maxLines: 2,
                     overflow: go.TextOverflow.Ellipsis,
-                    toolTip: go.GraphObject.build('ToolTip').add(new go.TextBlock({ margin: 6 }).bind('text')),
+                    // 기본 툴팁 대신 React 오버레이 사용
                 })
                   .bindTwoWay('text').bindTwoWay('scale').bindTwoWay('font'),
                 new go.Shape('LineH', { stretch: go.Stretch.Horizontal, strokeWidth: 3, height: 3, portId: '', fromSpot: go.Spot.LeftRightSides, toSpot: go.Spot.LeftRightSides })
@@ -160,6 +190,11 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                 shadowBlur: 10,
                 shadowColor: "rgba(0, 0, 0, .15)",
                 shadowOffset: new go.Point(3, 3),
+                mouseEnter: (e: go.InputEvent, obj: go.GraphObject) => {
+                    const n = obj.part as go.Node;
+                    if (n) showHoverForNode(n);
+                },
+                mouseLeave: (_e: go.InputEvent, _obj: go.GraphObject) => { hideHoverDelayed(); },
             })
             .bindTwoWay('location', 'loc', go.Point.parse, go.Point.stringify)
             .add(
@@ -181,7 +216,7 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                     editable: true,
                     maxLines: 2,
                     overflow: go.TextOverflow.Ellipsis,
-                    toolTip: go.GraphObject.build('ToolTip').add(new go.TextBlock({ margin: 6 }).bind('text')),
+                    // 기본 툴팁 대신 React 오버레이 사용
                 }).bindTwoWay("text")
             )
         );
@@ -332,6 +367,23 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                             <div ref={diagramRef} className="h-full w-full rounded-xl" />
                             {/* Overview minimap */}
                             <div ref={overviewRef} className="absolute bottom-3 right-3 w-48 h-32 bg-white/80 border border-neutral-200 rounded-lg shadow" />
+                            {/* Hover overlay */}
+                            {hoverCard.visible && (
+                              <div
+                                className="absolute z-20 rounded-xl border border-slate-200 bg-white/95 shadow-lg px-3 py-2 text-xs text-slate-800"
+                                style={{ left: hoverCard.left, top: hoverCard.top }}
+                                onMouseEnter={() => { if (hoverHideTimer.current) { window.clearTimeout(hoverHideTimer.current); hoverHideTimer.current = null; } }}
+                                onMouseLeave={() => hideHoverDelayed()}
+                              >
+                                <div className="mb-1">해당 기능과 관련된 코드로 이동하시겠습니까?</div>
+                                <div className="flex justify-end">
+                                  <button
+                                    className="px-2.5 py-1 rounded-md border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
+                                    onClick={() => navigate('/code')}
+                                  >이동</button>
+                                </div>
+                              </div>
+                            )}
                         </div>
                     </div>
                 </div>

@@ -184,9 +184,9 @@ export default function NotificationsDrawer({ open, onClose, onChange }: Props) 
                           <div className="mt-1 text-xs text-gray-500">{timeAgo(n.createdAt)}</div>
 
                           {n.notificationType === 'INVITE_MINDMAP' && n.actionAvailable === true && typeof n.referenceId === 'number' && (
-                            <div className="mt-3 flex items-center gap-2">
+                            <div className="mt-3 flex items-center gap-1.5">
                               <button
-                                className="px-3 py-1.5 text-xs rounded-md border bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-60"
+                                className="px-2 py-1 text-[11px] rounded-md border bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-60"
                                 disabled={actingId === n.notificationId}
                                 onClick={async (e) => {
                                   e.stopPropagation();
@@ -194,9 +194,7 @@ export default function NotificationsDrawer({ open, onClose, onChange }: Props) 
                                   try {
                                     await acceptInvitation(n.referenceId!);
                                     toast.success('초대를 승인했습니다.');
-                                    // 서버에서도 알림 삭제하여 재등장 방지
                                     try { await deleteNotification(n.notificationId); } catch {}
-                                    // 로컬에서도 제거
                                     setData(prev => prev ? { ...prev, content: prev.content.filter(x => x.notificationId !== n.notificationId), totalElements: Math.max(0, prev.totalElements - 1) } : prev);
                                     onChange?.();
                                   } catch (err: any) {
@@ -208,7 +206,7 @@ export default function NotificationsDrawer({ open, onClose, onChange }: Props) 
                                 }}
                               >승인</button>
                               <button
-                                className="px-3 py-1.5 text-xs rounded-md border bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60"
+                                className="px-2 py-1 text-[11px] rounded-md border bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60"
                                 disabled={actingId === n.notificationId}
                                 onClick={async (e) => {
                                   e.stopPropagation();
