@@ -7,7 +7,6 @@ import { TechStackModal } from '../../components/modal/TechStackModal';
 import type { Mindmap, MindMapDataNode } from '../../types';
 import { toast } from 'sonner';
 import { createMindmapAsync, getMindmapDetail, type MindmapDetailResponse } from '../../api/mindmap';
-import { AutoDismissModal } from '../../components/modal/AutoDismissModal';
 import { getVisitHistory, getPinnedVisits, pinVisit, unpinVisit, connectHistorySSE, throttle, type VisitHistoryItem } from '../../api/visitHistory';
 import httpClient from '../../api/httpClient';
 
@@ -22,12 +21,9 @@ const MindmapPage: React.FC = () => {
   const navigate = useNavigate();
   const [openTechModal, setOpenTechModal] = useState<boolean>(Boolean(location.state?.showTechStackModal));
   const [isCreating, setIsCreating] = useState<boolean>(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalMessage, setModalMessage] = useState('');
 
-  // 방문 기록 상태
   const [visitPage, setVisitPage] = useState(0);
-  const [visitSize] = useState(6);
+  const [visitSize] = useState(4);
   const [visitItems, setVisitItems] = useState<VisitHistoryItem[]>([]);
   const [visitTotalPages, setVisitTotalPages] = useState(0);
   const [visitLoading, setVisitLoading] = useState(false);
@@ -78,7 +74,6 @@ const MindmapPage: React.FC = () => {
     return build(rootKey!);
   }
 
-  // SSE 연결: 핀 추가/해제 이벤트에 반응하여 핀 목록 갱신 (쓰로틀)
   useEffect(() => {
     const baseUrl = (httpClient.defaults.baseURL as string) || '';
     if (!baseUrl) return;
@@ -201,10 +196,8 @@ const MindmapPage: React.FC = () => {
     setError('');
     setIsCreating(true);
     try {
-      const res = await createMindmapAsync(githubLink.trim());
+      const res = await createMindmapAsync(githubLink.trim(), prompt);
       toast.success(res.message || '마인드맵 생성 요청이 접수되었습니다.');
-      setModalMessage(res.message || '마인드맵 생성이 시작되었습니다.');
-      setModalOpen(true);
 
       // SSE 구독: 알림 기반으로 생성 완료 시 상세 페이지로 이동
       const baseUrl = (httpClient.defaults.baseURL as string) || '';
@@ -278,7 +271,7 @@ const MindmapPage: React.FC = () => {
                 type="text"
                 value={githubLink}
                 onChange={(e) => setGithubLink(e.target.value)}
-                placeholder="링크를 추가해 보세요"
+                placeholder="깃허브 레포지토리 링크를 입력해주세요"
                 className="flex-grow p-4 h-full bg-transparent focus:outline-none text-gray-700 text-xl placeholder:text-gray-400"
                 disabled={isCreating}
               />
@@ -292,7 +285,7 @@ const MindmapPage: React.FC = () => {
             </div>
             <input
               className="w-full max-w-4xl p-4 bg-white/50 rounded-2xl text-sky-900 focus:outline-none focus:ring-2 focus:ring-sky-400 transition-colors placeholder:text-sky-800/60 border border-white/80"
-              placeholder="마인드맵 제목을 작성해주세요. 미입력시, AI가 자동으로 생성합니다."
+              placeholder="마인드맵 제목을 작성해주세요. 미입력시, 기본 제목으로 생성합니다."
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               disabled={isCreating}
@@ -314,9 +307,7 @@ const MindmapPage: React.FC = () => {
                     className="flex flex-col justify-between p-6 rounded-2xl bg-white transition-all duration-300 cursor-pointer border border-slate-200/80 shadow-md hover:shadow-xl hover:-translate-y-1"
                     onClick={() => {
                       const now = new Date().toISOString();
-                      // optimistic update for pinned list
                       setPinned(prev => prev.map(p => p.mindmapId === item.mindmapId ? { ...p, lastVisitedAt: now } : p));
-                      // optimistic update for main visit list
                       setVisitItems(prev => prev.map(v => v.mindmapId === item.mindmapId ? { ...v, lastVisitedAt: now } : v));
                       navigate(`/mindmap/${item.mindmapId}`);
                     }}
@@ -334,7 +325,7 @@ const MindmapPage: React.FC = () => {
                     </div>
                     <h3 className="text-2xl font-bold text-gray-800 my-1 truncate">{item.mindmapTitle}</h3>
                     <div className="flex justify-between items-center mt-4">
-                      <p className="text-sm text-sky-700">최근 방문 {new Date(item.lastVisitedAt).toLocaleString()}</p>
+                      <p className="text-sm text-sky-700">{new Date(item.lastVisitedAt).toLocaleString()}</p>
                       <svg className="w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                       </svg>
@@ -384,7 +375,7 @@ const MindmapPage: React.FC = () => {
                       </div>
                       <h3 className="text-2xl font-bold text-gray-800 my-1 truncate">{it.mindmapTitle}</h3>
                       <div className="flex justify-between items-center mt-4">
-                        <p className="text-sm text-sky-700 ">최근 방문 {new Date(it.lastVisitedAt).toLocaleString()}</p>
+                        <p className="text-sm text-sky-700 ">{new Date(it.lastVisitedAt).toLocaleString()}</p>
                         <svg className="w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                         </svg>
@@ -392,24 +383,20 @@ const MindmapPage: React.FC = () => {
                     </div>
                   ))}
                 </div>
-                <div className="mt-2 flex items-center justify-center gap-2">
+                <div className="mt-2 flex items-center justify-center gap-3">
                   <button
-                    className="px-3 py-1.5 rounded-md border text-sm disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs rounded-full border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 disabled:opacity-50 disabled:hover:bg-sky-50"
                     disabled={visitPage === 0}
                     onClick={() => setVisitPage((p) => Math.max(0, p - 1))}
-                  >
-                    이전
-                  </button>
-                  <span className="text-sm text-slate-600">
+                  >이전</button>
+                  <span className="text-xs px-2 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
                     {visitPage + 1} / {Math.max(1, visitTotalPages)}
                   </span>
                   <button
-                    className="px-3 py-1.5 rounded-md border text-sm disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs rounded-full border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 disabled:opacity-50 disabled:hover:bg-sky-50"
                     disabled={visitPage + 1 >= visitTotalPages}
                     onClick={() => setVisitPage((p) => p + 1)}
-                  >
-                    다음
-                  </button>
+                  >다음</button>
                 </div>
               </>
             )}
@@ -418,7 +405,6 @@ const MindmapPage: React.FC = () => {
       </div>
 
       <TechStackModal isOpen={openTechModal} onClose={() => setOpenTechModal(false)} />
-      <AutoDismissModal open={modalOpen} message={modalMessage} onClose={() => setModalOpen(false)} variant="success" />
     </div>
   );
 };

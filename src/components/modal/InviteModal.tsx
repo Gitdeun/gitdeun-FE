@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { inviteMindmap, getMindmapInvitations, createMindmapInvitationLink, type MindmapInvitationRole, type MindmapInvitationItem, type PageResponse } from "../../api/mindmap";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -17,58 +19,67 @@ interface TeamMember {
 interface InviteModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  mapId: number;
+  mindmapTitle: string;
 }
 
-export function InviteModal({ open, onOpenChange }: InviteModalProps) {
+export function InviteModal({ open, onOpenChange, mapId, mindmapTitle }: InviteModalProps) {
   const [email, setEmail] = useState("");
   const [selectedRole, setSelectedRole] = useState("can view");
-  const [showCopyAlert, setShowCopyAlert] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // [수정] teamMembers 상태를 업데이트할 수 있도록 setTeamMembers를 추가합니다.
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([
-    { id: "3", name: "오새론", email: "owner@example.com", role: "owner", isMe: true },
-    { id: "4", name: "백승은", email: "baekseung@example.com", role: "can edit" }
-  ]);
+  // 기존 하드코드 멤버 대신, 초대 목록을 서버에서 조회
+  const [invitations, setInvitations] = useState<MindmapInvitationItem[]>([]);
+  const [invPage, setInvPage] = useState(0);
+  const [invTotalPages, setInvTotalPages] = useState(0);
+  const [invLoading, setInvLoading] = useState(false);
+  const INV_PAGE_SIZE = 4;
 
-  // [수정] handleInvite가 이제 teamMembers 목록에 직접 추가합니다.
-  const handleInvite = () => {
-    if (email.trim()) {
-      const newMember: TeamMember = {
-        id: Date.now().toString(),
-        name: email.split('@')[0],
-        email: email.trim(),
-        role: selectedRole as 'can edit' | 'can view'
-      };
-      setTeamMembers(prev => [...prev, newMember]); // 이제 teamMembers 상태를 업데이트합니다.
+  const loadInvitations = async (page = 0) => {
+    setInvLoading(true);
+    try {
+      const res = await getMindmapInvitations(mapId, { page, size: INV_PAGE_SIZE });
+      setInvitations(res.content);
+      setInvTotalPages(res.totalPages);
+      setInvPage(res.number);
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || '초대 목록을 불러오지 못했습니다.';
+      toast.error(msg);
+    } finally {
+      setInvLoading(false);
+    }
+  };
+
+  // 모달 열릴 때 목록 로드
+  useEffect(() => {
+    if (open) {
+      void loadInvitations(0);
+    }
+  }, [open, mapId]);
+
+  // 초대 API 호출
+  const handleInvite = async () => {
+    const trimmed = email.trim();
+    if (!trimmed || loading) return;
+    const roleMap: Record<'can edit' | 'can view', MindmapInvitationRole> = {
+      'can edit': 'EDITOR',
+      'can view': 'VIEWER',
+    };
+    setLoading(true);
+    try {
+      await inviteMindmap(mapId, { email: trimmed, role: roleMap[selectedRole as 'can edit' | 'can view'] });
+      toast.success('초대가 전송되었습니다.');
+      // 목록 새로고침
+      await loadInvitations(0);
       setEmail("");
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || '초대 전송에 실패했습니다.';
+      toast.error(msg);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href).then(() => {
-      setShowCopyAlert(true);
-      setTimeout(() => {
-        setShowCopyAlert(false);
-      }, 2000);
-    });
-  };
-
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'owner': return 'bg-red-100 text-red-800';
-      case 'can edit': return 'bg-blue-100 text-blue-800';
-      case 'can view': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const handleTeamMemberRoleChange = (memberId: string, newRole: string) => {
-    setTeamMembers(prev =>
-      prev.map(member =>
-        member.id === memberId ? { ...member, role: newRole as 'can edit' | 'can view' } : member
-      )
-    );
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -77,12 +88,21 @@ export function InviteModal({ open, onOpenChange }: InviteModalProps) {
           <DialogHeader className="pb-0">
             <div className="flex items-start justify-between px-5 pt-5">
               <div>
-                <DialogTitle className="text-slate-900">혜택온</DialogTitle>
+                <DialogTitle className="text-slate-900">{mindmapTitle}</DialogTitle>
                 <p className="text-sm text-slate-500 mt-1">프로젝트에 팀원을 초대하고 권한을 설정하세요.</p>
               </div>
               <Button
                 variant="ghost"
-                onClick={handleShare}
+                onClick={async () => {
+                  try {
+                    const { invitationLink } = await createMindmapInvitationLink(mapId);
+                    await navigator.clipboard.writeText(invitationLink);
+                    toast.success('URL 링크가 복사되었습니다');
+                  } catch (e: any) {
+                    const msg = e?.response?.data?.message || e?.message || '초대 링크 생성에 실패했습니다.';
+                    toast.error(msg);
+                  }
+                }}
                 className="flex items-center gap-1 px-3 py-2 h-9 text-sky-700 hover:text-sky-800 hover:bg-sky-50"
               >
                 <Share2 className="w-4 h-4" />
@@ -123,60 +143,66 @@ export function InviteModal({ open, onOpenChange }: InviteModalProps) {
 
                 <Button
                   onClick={handleInvite}
-                  disabled={!email.trim()}
-                  className="bg-sky-600 hover:bg-sky-700 text-white px-4"
+                  disabled={!email.trim() || loading}
+                  className="bg-sky-600 hover:bg-sky-700 text-white px-4 disabled:opacity-60"
                 >
-                  초대하기
+                  {loading ? '전송 중…' : '초대하기'}
                 </Button>
               </div>
             </div>
 
-            {/* 팀원 목록 */}
+            {/* 초대한 사용자 목록 */}
             <div className="space-y-3">
-              <h4 className="text-slate-900 text-sm font-semibold">팀원</h4>
-              {teamMembers.map((member) => (
-                <div key={member.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3.5 py-2.5">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-8 w-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-semibold">
-                      {member.name.slice(0, 2)}
+              <h4 className="text-slate-900 text-sm font-semibold">초대한 사용자</h4>
+              {/* 공유하기 버튼에서 링크 생성/복사 처리 */}
+              {invLoading ? (
+                <div className="text-sm text-slate-500">불러오는 중…</div>
+              ) : (() => {
+                const visibleInvites = invitations.filter(inv => !!inv.inviteeEmail && inv.inviteeEmail.includes('@'));
+                if (visibleInvites.length === 0) {
+                  return <div className="text-sm text-slate-500">아직 초대한 사용자가 없습니다.</div>;
+                }
+                return (
+                  visibleInvites.map(inv => (
+                    <div key={inv.invitationId} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3.5 py-2.5">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-8 w-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-semibold">
+                          {inv.inviteeName?.slice(0,2) || inv.inviteeEmail.slice(0,2)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-slate-900 text-sm truncate">{inv.inviteeName || inv.inviteeEmail}</div>
+                          <div className="text-slate-500 text-xs truncate">{inv.inviteeEmail}</div>
+                          <div className="text-slate-400 text-xs">{new Date(inv.createdAt).toLocaleString()}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className={`text-xs px-2.5 py-1 rounded-md ${inv.role === 'EDITOR' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>{inv.role}</Badge>
+                        <Badge className={`text-xs px-2.5 py-1 rounded-md ${inv.status === 'ACCEPTED' ? 'bg-green-100 text-green-800' : inv.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>{inv.status}</Badge>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-slate-900 text-sm truncate">{member.name}{member.isMe && ' (나)'}</div>
-                      <div className="text-slate-500 text-xs truncate">{member.email}</div>
-                    </div>
-                  </div>
-                  {member.role === 'owner' ? (
-                    <Badge className={`${getRoleColor(member.role)} border border-transparent text-xs px-2.5 py-1 rounded-md`}>{member.role}</Badge>
-                  ) : (
-                    <Select
-                      value={member.role}
-                      onValueChange={(value) => handleTeamMemberRoleChange(member.id, value)}
-                    >
-                      <SelectTrigger className="w-36 h-8 rounded-lg bg-white border border-sky-200/80 text-sky-800 text-xs shadow-sm hover:bg-sky-50 focus:ring-2 focus:ring-sky-300/50">
-                        <SelectValue placeholder="권한" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white rounded-lg border border-slate-200 shadow-xl p-1">
-                        <SelectItem value="can view" className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-sky-50 focus:bg-sky-50 cursor-pointer">
-                          <Eye className="w-4 h-4 text-sky-600" />
-                          <span className="text-sm text-slate-800">can view</span>
-                        </SelectItem>
-                        <SelectItem value="can edit" className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-sky-50 focus:bg-sky-50 cursor-pointer">
-                          <Pencil className="w-4 h-4 text-sky-700" />
-                          <span className="text-sm text-slate-800">can edit</span>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
+                  ))
+                );
+              })()}
+              {invTotalPages > 1 && (
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <button
+                    className="px-3 py-1.5 text-xs rounded-full border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 disabled:opacity-50 disabled:hover:bg-sky-50"
+                    disabled={invPage === 0}
+                    onClick={() => void loadInvitations(Math.max(0, invPage - 1))}
+                  >이전</button>
+                  <span className="text-xs px-2 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+                    {invPage + 1} / {invTotalPages}
+                  </span>
+                  <button
+                    className="px-3 py-1.5 text-xs rounded-full border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 disabled:opacity-50 disabled:hover:bg-sky-50"
+                    disabled={invPage + 1 >= invTotalPages}
+                    onClick={() => void loadInvitations(invPage + 1)}
+                  >다음</button>
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
-          {showCopyAlert && (
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-4 py-2 rounded-lg text-xs shadow-lg ring-1 ring-black/5">
-              URL 링크가 복사되었습니다
-            </div>
-          )}
         </div>
       </DialogContent>
     </Dialog>

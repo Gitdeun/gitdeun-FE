@@ -8,6 +8,8 @@ import {
   type NotificationItem,
   type Page,
 } from "../../api/notification";
+import { acceptInvitation, deleteInvitation } from "../../api/mindmap";
+import { toast } from "sonner";
 
 function timeAgo(iso: string) {
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -31,6 +33,7 @@ export default function NotificationsDrawer({ open, onClose, onChange }: Props) 
   const [data, setData] = useState<Page<NotificationItem> | null>(null);
   const [loading, setLoading] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
+  const [actingId, setActingId] = useState<number | null>(null);
 
   const load = async (p = 0) => {
     setLoading(true);
@@ -179,6 +182,55 @@ export default function NotificationsDrawer({ open, onClose, onChange }: Props) 
                             {n.message}
                           </div>
                           <div className="mt-1 text-xs text-gray-500">{timeAgo(n.createdAt)}</div>
+
+                          {n.notificationType === 'INVITE_MINDMAP' && n.actionAvailable === true && typeof n.referenceId === 'number' && (
+                            <div className="mt-3 flex items-center gap-2">
+                              <button
+                                className="px-3 py-1.5 text-xs rounded-md border bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-60"
+                                disabled={actingId === n.notificationId}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  setActingId(n.notificationId);
+                                  try {
+                                    await acceptInvitation(n.referenceId!);
+                                    toast.success('초대를 승인했습니다.');
+                                    // 서버에서도 알림 삭제하여 재등장 방지
+                                    try { await deleteNotification(n.notificationId); } catch {}
+                                    // 로컬에서도 제거
+                                    setData(prev => prev ? { ...prev, content: prev.content.filter(x => x.notificationId !== n.notificationId), totalElements: Math.max(0, prev.totalElements - 1) } : prev);
+                                    onChange?.();
+                                  } catch (err: any) {
+                                    const msg = err?.response?.data?.message || err?.message || '승인에 실패했습니다.';
+                                    toast.error(msg);
+                                  } finally {
+                                    setActingId(null);
+                                  }
+                                }}
+                              >승인</button>
+                              <button
+                                className="px-3 py-1.5 text-xs rounded-md border bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60"
+                                disabled={actingId === n.notificationId}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  setActingId(n.notificationId);
+                                  try {
+                                    await deleteInvitation(n.referenceId!);
+                                    toast.success('초대를 거절했습니다.');
+                                    // 서버에서도 알림 삭제
+                                    try { await deleteNotification(n.notificationId); } catch {}
+                                    // 로컬에서도 제거
+                                    setData(prev => prev ? { ...prev, content: prev.content.filter(x => x.notificationId !== n.notificationId), totalElements: Math.max(0, prev.totalElements - 1) } : prev);
+                                    onChange?.();
+                                  } catch (err: any) {
+                                    const msg = err?.response?.data?.message || err?.message || '거절에 실패했습니다.';
+                                    toast.error(msg);
+                                  } finally {
+                                    setActingId(null);
+                                  }
+                                }}
+                              >거절</button>
+                            </div>
+                          )}
                         </div>
 
                         {!n.read && (

@@ -339,7 +339,7 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                     <ChatPanel />
                 </div>
             </div>
-            <InviteModal open={inviteModalOpen} onOpenChange={setInviteModalOpen} />
+            <InviteModal open={inviteModalOpen} onOpenChange={setInviteModalOpen} mapId={mindmap.id} mindmapTitle={mindmap.title} />
         </div>
     );
 }

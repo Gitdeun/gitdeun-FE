@@ -6,8 +6,10 @@ export type MindmapAsyncResponse = {
   message: string;
 };
 
-export const createMindmapAsync = async (repoUrl: string): Promise<MindmapAsyncResponse> => {
-  const res = await httpClient.post('/mindmaps/async', { repoUrl });
+export const createMindmapAsync = async (repoUrl: string, title?: string): Promise<MindmapAsyncResponse> => {
+  const payload: { repoUrl: string; title?: string } = { repoUrl };
+  if (title && title.trim()) payload.title = title.trim();
+  const res = await httpClient.post('/mindmaps/async', payload);
   return res.data as MindmapAsyncResponse;
 };
 
@@ -98,5 +100,72 @@ export async function updateMindmapTitle(mapId: number, title: string) {
 // ================= Delete =================
 export async function deleteMindmap(mapId: number) {
   const res = await httpClient.delete(`/mindmaps/${mapId}`);
+  return res.data;
+}
+
+// ================= Invitations =================
+export type MindmapInvitationRole = 'EDITOR' | 'VIEWER';
+export async function inviteMindmap(mapId: number, body: { email: string; role: MindmapInvitationRole }) {
+  const res = await httpClient.post(`/invitations/mindmaps/${mapId}`, body);
+  return res.data;
+}
+
+export type MindmapInvitationItem = {
+  invitationId: number;
+  mindmapTitle: string;
+  inviteeName: string;
+  inviteeEmail: string;
+  role: MindmapInvitationRole;
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | string;
+  createdAt: string;
+};
+
+export type PageResponse<T> = {
+  content: T[];
+  pageable: any;
+  last: boolean;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  size: number;
+  number: number;
+  sort: any;
+  numberOfElements: number;
+  empty: boolean;
+};
+
+export async function getMindmapInvitations(mapId: number, params: { page?: number; size?: number } = {}) {
+  const { page = 0, size = 10 } = params;
+  const res = await httpClient.get<PageResponse<MindmapInvitationItem>>(`/invitations/mindmaps/${mapId}`, { params: { page, size } });
+  return res.data;
+}
+
+export async function createMindmapInvitationLink(mapId: number): Promise<{ invitationLink: string }> {
+  const res = await httpClient.post(`/invitations/mindmaps/${mapId}/link`);
+  return res.data as { invitationLink: string };
+}
+
+export async function acceptInvitationByToken(token: string) {
+  const res = await httpClient.post(`/invitations/link/${token}/accept`);
+  return res.data;
+}
+
+export async function approveInvitation(invitationId: number) {
+  const res = await httpClient.post(`/invitations/${invitationId}/approve`);
+  return res.data;
+}
+
+export async function rejectInvitation(invitationId: number) {
+  const res = await httpClient.post(`/invitations/${invitationId}/reject`);
+  return res.data;
+}
+
+export async function acceptInvitation(invitationId: number) {
+  const res = await httpClient.post(`/invitations/${invitationId}/accept`);
+  return res.data;
+}
+
+export async function deleteInvitation(invitationId: number) {
+  const res = await httpClient.delete(`/invitations/${invitationId}/reject`);
   return res.data;
 }
