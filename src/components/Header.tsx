@@ -103,99 +103,95 @@ export default function Header() {
       />
       <NotificationsDrawer open={notifOpen} onClose={() => setNotifOpen(false)} />
         
-      <header className="w-full border-b border-neutral-200 bg-white/80 backdrop-blur">
-        <div className="mx-auto w-full max-w-[min(1400px,98vw)] px-4 sm:px-6 lg:px-8 py-5 sm:py-6 flex justify-between items-center gap-4">
-          <div className="flex items-center gap-4 sm:gap-6 min-w-0">
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <img src={logo} alt="Gitdeun logo" className="w-7 h-7 sm:w-8 sm:h-8" />
-              <span className="text-xl sm:text-2xl font-bold text-sky-900">깃든</span>
-            </div>
+      <header className="w-full flex justify-between items-center px-[60px] py-[30px]">
+        <div className="flex items-center space-x-1">
+          <img src={logo} alt="Gitdeun logo" className="w-8 h-8" />
+          <span className="text-2xl font-bold text-sky-900">깃든</span>
 
-            <nav className="flex items-center gap-5 sm:gap-7 truncate">
-              <Link
-                to="/mindmap"
-                className={`${baseNav} ${isMindmap ? active : inactive}`}
-                aria-current={isMindmap ? "page" : undefined}
-                onClick={(e) => {
-                  const token = localStorage.getItem("accessToken")?.trim();
-                  if (!token) { e.preventDefault(); setShowModal(true); }
-                }}
-              >
-                마인드맵
-              </Link>
+          <nav className="flex items-center space-x-8 ml-[70px]">
+            <Link
+              to="/mindmap"
+              className={`${baseNav} ${isMindmap ? active : inactive}`}
+              aria-current={isMindmap ? "page" : undefined}
+              onClick={(e) => {
+                const token = localStorage.getItem("accessToken")?.trim();
+                if (!token) { e.preventDefault(); setShowModal(true); }
+              }}
+            >
+              마인드맵
+            </Link>
 
-              <Link
-                to="/posts"
-                className={`${baseNav} ${isPosts ? active : inactive}`}
-                aria-current={isPosts ? "page" : undefined}
-                onClick={(e) => {
-                  const token = localStorage.getItem("accessToken")?.trim();
-                  if (!token) { e.preventDefault(); setShowModal(true); }
-                }}
-              >
-                팀원 모집
-              </Link>
+            <Link
+              to="/posts"
+              className={`${baseNav} ${isPosts ? active : inactive}`}
+              aria-current={isPosts ? "page" : undefined}
+              onClick={(e) => {
+                const token = localStorage.getItem("accessToken")?.trim();
+                if (!token) { e.preventDefault(); setShowModal(true); }
+              }}
+            >
+              팀원 모집
+            </Link>
 
-              <Link
-                to="/mypage"
-                className={`${baseNav} ${isMypage ? active : inactive}`}
-                aria-current={isMypage ? "page" : undefined}
-                onClick={(e) => {
-                  const token = localStorage.getItem("accessToken")?.trim();
-                  if (!token) { e.preventDefault(); setShowModal(true); }
-                }}
-              >
-                마이페이지
-              </Link>
-            </nav>
-          </div>
-
-          <div className="flex items-center gap-4 sm:gap-6">
-            <div>
-              <button
-                type="button"
-                aria-label="Open notifications"
-                onClick={handleBellClick}
-                className="relative p-2 text-gray-700 rounded-full hover:bg-gray-100"
-              >
-                <Bell className="w-5 h-5" />
-                {unread > 0 ? (
-                  <span
-                    className="absolute -right-1 -top-1 inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-red-500 px-1 text-[10px] text-white"
-                  >
-                    {unread > 99 ? "99+" : unread}
-                  </span>
-                ) : null}
-              </button>
-            </div>
-
-            {!user ? (
-              <button
-                onClick={() => setShowModal(true)}
-                className="bg-sky-500 text-white px-5 py-2.5 rounded-full text-sm sm:text-base font-bold hover:scale-[1.02] transition-transform duration-150"
-              >
-                로그인
-              </button>
-            ) : (
-              <div className="flex items-center gap-3 sm:gap-4">
-                <img 
-                  src={user.profileImage} 
-                  alt="프로필 이미지" 
-                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full"
-                />
-                <span className="text-sm sm:text-base font-bold truncate max-w-[20ch]">{user.nickname}님</span>
-                <button
-                  onClick={handleLogout}
-                  className="bg-red-500 text-white px-5 py-2.5 rounded-full text-sm sm:text-base font-bold hover:scale-[1.02] transition-transform duration-150"
-                >
-                  로그아웃
-                </button>
-              </div>
-            )}
-          </div>
-
-          {showModal && <LoginModal onClose={() => setShowModal(false)} />}
+            <Link
+              to="/mypage"
+              className={`${baseNav} ${isMypage ? active : inactive}`}
+              aria-current={isMypage ? "page" : undefined}
+              onClick={(e) => {
+                const token = localStorage.getItem("accessToken")?.trim();
+                if (!token) { e.preventDefault(); setShowModal(true); }
+              }}
+            >
+              마이페이지
+            </Link>
+          </nav>
         </div>
+
+        <div className="flex items-center gap-6">
+          <div>
+            <button
+              type="button"
+              aria-label="Open notifications"
+              onClick={handleBellClick}
+              className="relative p-2 text-gray-700 rounded-full hover:bg-gray-100"
+            >
+              <Bell />
+              {unread > 0 ? (
+                <span
+                  className="absolute -right-1 -top-1 inline-flex items-center justify-center h-4 min-w-4 rounded-full bg-red-500 px-1 text-[10px] text-white"
+                >
+                  {unread > 99 ? "99+" : unread}
+                </span>
+              ) : null}
+            </button>
+          </div>
+
+          {!user ? (
+            <button
+              onClick={() => setShowModal(true)}
+              className="bg-sky-300 text-white px-[24px] py-[12px] rounded-full text-lg font-bold hover:scale-105 transition-transform duration-200 ease-in-out"
+            >
+              로그인
+            </button>
+          ) : (
+            <div className="flex items-center space-x-4">
+              <img 
+                src={user.profileImage} 
+                alt="프로필 이미지" 
+                className="w-10 h-10 rounded-full"
+              />
+              <span className="text-lg font-bold">{user.nickname}님</span>
+              <button
+                onClick={handleLogout}
+                className="bg-red-400 text-white px-[24px] py-[12px] rounded-full text-lg font-bold hover:scale-105 transition-transform duration-200 ease-in-out"
+              >
+                로그아웃
+              </button>
+            </div>
+          )}
+        </div>
+
+        {showModal && <LoginModal onClose={() => setShowModal(false)} />}
       </header>
     </>
   );

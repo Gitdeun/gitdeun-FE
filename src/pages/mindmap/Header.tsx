@@ -40,7 +40,7 @@ export const Header: React.FC<{
   };
 
   return (
-    <header className="px-4 py-3 border-b bg-white/90 backdrop-blur">
+    <header className="px-4 py-5 sm:py-6 border-b bg-white/90 backdrop-blur">
       <div className="max-w-[1600px] mx-auto flex items-center justify-between">
         <div className="flex items-center gap-2">
           {editing ? (

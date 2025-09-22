@@ -179,3 +179,26 @@ export function connectMindmapSSE({
   es.onerror = (ev) => { if (onError) onError(ev); };
   return es;
 }
+
+// ================= Prompts =================
+export async function sendMindmapPrompt(mapId: number, prompt: string) {
+  const res = await httpClient.post(`/mindmaps/${mapId}/prompts`, { prompt });
+  return res.data;
+}
+
+export type PromptHistoryItem = {
+  historyId: number;
+  prompt: string;
+  summary: string;
+  applied: boolean;
+  createdAt: string;
+};
+
+export async function getMindmapPromptHistories(
+  mapId: number,
+  params: { page?: number; size?: number } = {}
+) {
+  const { page = 0, size = 10 } = params;
+  const res = await httpClient.get(`/mindmaps/${mapId}/prompts/histories`, { params: { page, size } });
+  return res.data as PageResponse<PromptHistoryItem>;
+}

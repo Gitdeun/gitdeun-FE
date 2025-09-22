@@ -83,6 +83,12 @@ export default function NotificationsDrawer({ open, onClose, onChange }: Props) 
       );
       onChange?.();
     }
+    // If this is an analysis completion notification, notify ChatPanel via a custom event
+    if (n.notificationType === 'ANALYSIS_PROMPT') {
+      try {
+        window.dispatchEvent(new Event('mindmap:analysis_prompt'));
+      } catch {}
+    }
   };
 
   const handleMarkAll = async () => {
@@ -192,14 +198,13 @@ export default function NotificationsDrawer({ open, onClose, onChange }: Props) 
                             <div className="mt-3 flex items-center gap-1.5">
                               <button
                                 className="px-2 py-1 text-[11px] rounded-md border bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-60"
-                                disabled={actingId === n.notificationId || n.actionAvailable === false}
+                                disabled={actingId === n.notificationId}
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   setActingId(n.notificationId);
                                   try {
                                     const res = await acceptInvitation(n.referenceId!);
                                     toast.success('초대를 승인했습니다.');
-                                    // Keep notification, just disable actions
                                     setData(prev => prev ? {
                                       ...prev,
                                       content: prev.content.map(x => x.notificationId === n.notificationId ? { ...x, actionAvailable: false } : x)
@@ -218,7 +223,7 @@ export default function NotificationsDrawer({ open, onClose, onChange }: Props) 
                               >승인</button>
                               <button
                                 className="px-2 py-1 text-[11px] rounded-md border bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60"
-                                disabled={actingId === n.notificationId || n.actionAvailable === false}
+                                disabled={actingId === n.notificationId}
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   setActingId(n.notificationId);
