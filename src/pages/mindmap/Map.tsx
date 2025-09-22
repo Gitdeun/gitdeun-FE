@@ -92,10 +92,8 @@ const MindmapPage: React.FC = () => {
       } catch {}
     }, 800);
 
-    // keep latest page/size in refs for SSE refresh
     const pageRef = { current: visitPage } as { current: number };
     const sizeRef = { current: visitSize } as { current: number };
-    // update on change
     pageRef.current = visitPage;
     sizeRef.current = visitSize;
 
@@ -221,7 +219,7 @@ const MindmapPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isCreating) return; // guard double submit
+    if (isCreating) return; 
     if (!githubLink.trim()) {
       setError('GitHub 링크를 입력해주세요.');
       return;
@@ -232,43 +230,12 @@ const MindmapPage: React.FC = () => {
       const res = await createMindmapAsync(githubLink.trim(), prompt);
       toast.success(res.message || '마인드맵 생성 요청이 접수되었습니다.');
 
-      // SSE 구독: 알림 기반으로 생성 완료 시 상세 페이지로 이동
-      const baseUrl = (httpClient.defaults.baseURL as string) || '';
-      if (baseUrl) {
-        const es = new EventSource(`${baseUrl.replace(/\/$/, '')}/notifications/sse`, { withCredentials: true });
-        const closeES = () => { try { es.close(); } catch {} };
-        es.onmessage = (event: MessageEvent) => {
-          try {
-            const notification = JSON.parse(event.data) as {
-              notificationId?: number;
-              message?: string;
-              notificationType?: string;
-              referenceId?: number; // mindmapId
-              createdAt?: string;
-            };
-            const type = notification.notificationType || '';
-            const msg = notification.message || '';
-            const refId = notification.referenceId;
-            // 서버 타입 명시: CREATE_MINDMAP(생성), UPDATE_MINDMAP(갱신)
-            const createDone =
-              type === 'CREATE_MINDMAP' ||
-              // fallback (서버 메시지 포맷이 다른 경우까지 커버)
-              /(생성|만들기|create).*(완료|complete|done)/i.test(msg) ||
-              type === 'MINDMAP_CREATED' ||
-              type === 'MINDMAP_CREATE_COMPLETED' ||
-              (type === 'SYSTEM_UPDATE' && /생성/.test(msg));
-            if (createDone && typeof refId === 'number' && !Number.isNaN(refId)) {
-              closeES();
-              navigate(`/mindmap/${refId}`);
-            }
-          } catch {
-            // ignore parse errors
-          }
-        };
-        es.onerror = () => {
-          // SSE 오류는 조용히 무시
-        };
-      }
+      void getVisitHistory({ page: visitPage, size: visitSize })
+        .then(res2 => {
+          setVisitItems(res2.content);
+          setVisitTotalPages(res2.totalPages);
+        })
+        .catch(() => {});
 
       const newMindmap: Mindmap = {
         id: Date.now(),

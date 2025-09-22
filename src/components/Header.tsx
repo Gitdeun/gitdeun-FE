@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom"; 
+import { Link, useLocation, useNavigate } from "react-router-dom"; 
+import { toast } from "sonner";
 import logo from "../assets/images/ic_logo.svg";
 import LoginModal from "./modal/LoginModal";
 import { getUserInfo, logoutUser } from "../api/auth";
 import { Bell } from 'lucide-react';
 import NotificationConsent from "../components/notifications/NotificationConsent";
 import NotificationsDrawer from "../components/notifications/NotificationsDrawer";
-import { getUnreadCount } from "../api/notification";   
+import { getUnreadCount, openNotificationSSE } from "../api/notification";   
 
 interface User {
   nickname: string;
@@ -14,6 +15,7 @@ interface User {
 }
 
 export default function Header() {
+  const navigate = useNavigate();
   const [notifOpen, setNotifOpen] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -63,6 +65,26 @@ export default function Header() {
         setUnread(0);
       });
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const sub = openNotificationSSE({
+      onMessage: (payload: any) => {
+        try {
+          const type = payload?.notificationType;
+          const id = payload?.referenceId;
+          if (type === 'MINDMAP_CREATE' && typeof id === 'number' && !Number.isNaN(id)) {
+            toast.success('마인드맵이 생성되었습니다. 상세 페이지로 이동합니다.');
+            navigate(`/mindmap/${id}`);
+          }
+        } catch (e) {
+          console.warn('[SSE] handle message error', e);
+        }
+      },
+      onError: (e) => { console.warn('[SSE] notifications error', e); }
+    });
+    return () => sub.close();
+  }, [user, navigate]);
 
   useEffect(() => {
     if (!notifOpen) refreshUnread();
