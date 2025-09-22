@@ -236,28 +236,35 @@ const MindmapPage: React.FC = () => {
       const baseUrl = (httpClient.defaults.baseURL as string) || '';
       if (baseUrl) {
         const es = new EventSource(`${baseUrl.replace(/\/$/, '')}/notifications/sse`, { withCredentials: true });
-        const handler = (event: MessageEvent) => {
+        const closeES = () => { try { es.close(); } catch {} };
+        es.onmessage = (event: MessageEvent) => {
           try {
             const notification = JSON.parse(event.data) as {
-              notificationId: number;
-              message: string;
-              notificationType: string; // e.g., 'SYSTEM_UPDATE'
-              referenceId: number; // mindmapId
-              createdAt: string;
+              notificationId?: number;
+              message?: string;
+              notificationType?: string;
+              referenceId?: number; // mindmapId
+              createdAt?: string;
             };
-            const isCreateComplete =
-              notification.notificationType === 'SYSTEM_UPDATE' &&
-              /생성.*완료/.test(notification.message || '');
-            if (isCreateComplete && typeof notification.referenceId === 'number') {
-              es.removeEventListener('newNotification', handler as any);
-              es.close();
-              navigate(`/mindmap/${notification.referenceId}`);
+            const type = notification.notificationType || '';
+            const msg = notification.message || '';
+            const refId = notification.referenceId;
+            // 서버 타입 명시: CREATE_MINDMAP(생성), UPDATE_MINDMAP(갱신)
+            const createDone =
+              type === 'CREATE_MINDMAP' ||
+              // fallback (서버 메시지 포맷이 다른 경우까지 커버)
+              /(생성|만들기|create).*(완료|complete|done)/i.test(msg) ||
+              type === 'MINDMAP_CREATED' ||
+              type === 'MINDMAP_CREATE_COMPLETED' ||
+              (type === 'SYSTEM_UPDATE' && /생성/.test(msg));
+            if (createDone && typeof refId === 'number' && !Number.isNaN(refId)) {
+              closeES();
+              navigate(`/mindmap/${refId}`);
             }
           } catch {
             // ignore parse errors
           }
         };
-        es.addEventListener('newNotification', handler as any);
         es.onerror = () => {
           // SSE 오류는 조용히 무시
         };
@@ -385,9 +392,7 @@ const MindmapPage: React.FC = () => {
                       className="flex flex-col justify-between p-6 rounded-2xl bg-white transition-all duration-300 cursor-pointer border border-slate-200/80 shadow-md hover:shadow-xl hover:-translate-y-1"
                       onClick={() => {
                         const now = new Date().toISOString();
-                        // optimistic update for main visit list
                         setVisitItems(prev => prev.map(v => v.mindmapId === it.mindmapId ? { ...v, lastVisitedAt: now } : v));
-                        // optimistic update for pinned list if applicable
                         setPinned(prev => prev.map(p => p.mindmapId === it.mindmapId ? { ...p, lastVisitedAt: now } : p));
                         navigate(`/mindmap/${it.mindmapId}`);
                       }}
