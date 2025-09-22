@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 
+type ConnectedUser = {
+  userId: number;
+  nickname: string;
+  profileImage?: string;
+};
+
 export const Header: React.FC<{
   projectName: string;
   onBack: () => void;
@@ -7,7 +13,8 @@ export const Header: React.FC<{
   onLeave?: () => void;
   onRename?: (nextTitle: string) => Promise<void> | void;
   onDelete?: () => Promise<void> | void;
-}> = ({ projectName, onBack, onInvite, onRename, onDelete }) => {
+  connectedUsers?: ConnectedUser[];
+}> = ({ projectName, onBack, onInvite, onRename, onDelete, connectedUsers = [] }) => {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(projectName);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -86,6 +93,26 @@ export const Header: React.FC<{
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Connected users avatar group */}
+          {connectedUsers.length > 0 && (
+            <div className="flex items-center mr-1">
+              <div className="flex -space-x-2">
+                {connectedUsers.slice(0, 4).map((u) => (
+                  <img
+                    key={u.userId}
+                    src={u.profileImage || 'https://placehold.co/28x28?text=U'}
+                    alt={u.nickname}
+                    title={u.nickname}
+                    className="w-7 h-7 rounded-full ring-2 ring-white object-cover bg-neutral-200"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = 'https://placehold.co/28x28?text=U'; }}
+                  />
+                ))}
+              </div>
+              {connectedUsers.length > 4 && (
+                <span className="ml-2 text-xs text-neutral-500">+{connectedUsers.length - 4}</span>
+              )}
+            </div>
+          )}
           <button
             onClick={onInvite}
             className="px-4 py-1.5 text-sm font-semibold rounded-lg border border-sky-300 text-sky-700 bg-transparent hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-300/60 transition-colors"

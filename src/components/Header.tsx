@@ -77,7 +77,7 @@ export default function Header() {
     localStorage.removeItem("accessToken");
     setUser(null);
     setUnread(0);
-    window.location.href = "/";
+    window.location.href = "/login";
   };
 
   const handleBellClick = () => {
@@ -113,6 +113,10 @@ export default function Header() {
               to="/mindmap"
               className={`${baseNav} ${isMindmap ? active : inactive}`}
               aria-current={isMindmap ? "page" : undefined}
+              onClick={(e) => {
+                const token = localStorage.getItem("accessToken")?.trim();
+                if (!token) { e.preventDefault(); setShowModal(true); }
+              }}
             >
               마인드맵
             </Link>
@@ -121,6 +125,10 @@ export default function Header() {
               to="/posts"
               className={`${baseNav} ${isPosts ? active : inactive}`}
               aria-current={isPosts ? "page" : undefined}
+              onClick={(e) => {
+                const token = localStorage.getItem("accessToken")?.trim();
+                if (!token) { e.preventDefault(); setShowModal(true); }
+              }}
             >
               팀원 모집
             </Link>
@@ -129,6 +137,10 @@ export default function Header() {
               to="/mypage"
               className={`${baseNav} ${isMypage ? active : inactive}`}
               aria-current={isMypage ? "page" : undefined}
+              onClick={(e) => {
+                const token = localStorage.getItem("accessToken")?.trim();
+                if (!token) { e.preventDefault(); setShowModal(true); }
+              }}
             >
               마이페이지
             </Link>

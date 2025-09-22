@@ -6,14 +6,53 @@ import {InviteModal} from "../../components/modal/InviteModal.tsx";
 import type {Mindmap, MindMapDataNode} from "../../types";
 import { Header } from './Header';
 import { ChatPanel } from './ChatPanel';
-import { updateMindmapTitle, deleteMindmap } from '../../api/mindmap';
+import { updateMindmapTitle, deleteMindmap, type MindmapDetailResponse, getConnectedUsers, type ConnectedUser, connectMindmapSSE } from '../../api/mindmap';
+import httpClient from '../../api/httpClient';
 
+
+// Build a tree from backend graph response (defensive against missing nodes)
+function graphToTree(resp: MindmapDetailResponse): MindMapDataNode {
+  const nodes = new Map(resp.mindmapGraph.nodes.map(n => [n.key, n]));
+  const childrenMap = new Map<string, string[]>();
+  const hasParent = new Set<string>();
+  for (const e of resp.mindmapGraph.edges) {
+    if (!e.containmentEdge) continue;
+    if (!nodes.has(e.from) || !nodes.has(e.to)) continue;
+    const arr = childrenMap.get(e.from) ?? [];
+    arr.push(e.to);
+    childrenMap.set(e.from, arr);
+    hasParent.add(e.to);
+  }
+  let rootKey: string | undefined;
+  for (const n of resp.mindmapGraph.nodes) {
+    const hasOut = childrenMap.has(n.key);
+    if (!hasParent.has(n.key) && (hasOut || rootKey === undefined)) {
+      rootKey = n.key;
+    }
+  }
+  if (!rootKey) {
+    rootKey = resp.mindmapGraph.nodes[0]?.key;
+  }
+  const build = (key: string): MindMapDataNode => {
+    const nodeData = nodes.get(key);
+    if (!nodeData) {
+      return { node: '(unknown)', related_files: [], children: [] };
+    }
+    const kids = (childrenMap.get(key) || [])
+      .filter(childKey => nodes.has(childKey))
+      .map(build);
+    return { node: nodeData.label, related_files: nodeData.related_files || [], children: kids };
+  };
+  return build(rootKey!);
+}
 
 const transformDataForMindMapSample = (data: MindMapDataNode) => {
     const nodeDataArray: go.ObjectData[] = [];
     let keyCounter = 0;
     const branchColors = ["#51a1e6", "#66d456", "#e57373", "#ff8a65", "#ba68c8", "#90a4ae"];
     type Direction = 'left' | 'right';
+
+    // graphToTree is module-scoped now
 
     function traverse(node: MindMapDataNode, parentKey: number | null, dir: Direction | null, brush: string) {
         const currentKey = keyCounter++;
@@ -52,8 +91,80 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
     const [title, setTitle] = useState(mindmap.title);
     useEffect(() => { setTitle(mindmap.title); }, [mindmap.title]);
     const navigate = useNavigate();
-    const [hoverCard, setHoverCard] = useState<{ visible: boolean; left: number; top: number; text: string }>(() => ({ visible: false, left: 0, top: 0, text: '' }));
+  const [hoverCard, setHoverCard] = useState<{ visible: boolean; left: number; top: number; text: string }>(() => ({ visible: false, left: 0, top: 0, text: '' }));
   const hoverHideTimer = useRef<number | null>(null);
+  const [connectedUsers, setConnectedUsers] = useState<ConnectedUser[]>([]);
+
+  // Hover helpers at component scope so JSX can access
+  const cancelHoverHide = () => {
+    if (hoverHideTimer.current) {
+      window.clearTimeout(hoverHideTimer.current);
+      hoverHideTimer.current = null;
+    }
+  };
+  const hideHoverDelayed = () => {
+    if (hoverHideTimer.current) window.clearTimeout(hoverHideTimer.current);
+    hoverHideTimer.current = window.setTimeout(() => {
+      setHoverCard((prev) => (prev.visible ? { ...prev, visible: false } : prev));
+      hoverHideTimer.current = null;
+    }, 180);
+  };
+  const showHoverForNode = (node: go.Node) => {
+    if (!diagramRef.current || !diagramInstance.current) return;
+    const d = diagramInstance.current;
+    const ptDoc = node.getDocumentPoint(go.Spot.Top);
+    const ptView = d.transformDocToView(ptDoc);
+    cancelHoverHide();
+    setHoverCard({ visible: true, left: ptView.x + 8, top: Math.max(8, ptView.y - 8), text: (node.data as any)?.text || '' });
+  };
+
+    // Poll connected users every 10s
+    useEffect(() => {
+        let cancelled = false;
+        let timer: number | null = null;
+        const load = async () => {
+            try {
+                const list = await getConnectedUsers(mindmap.id);
+                if (!cancelled) setConnectedUsers(Array.isArray(list) ? list : []);
+            } catch {
+                if (!cancelled) setConnectedUsers([]);
+            }
+        };
+        void load();
+        timer = window.setInterval(() => { void load(); }, 10000);
+        return () => {
+            cancelled = true;
+            if (timer) window.clearInterval(timer);
+        };
+    }, [mindmap.id]);
+
+    // Open presence SSE for this mindmap
+    useEffect(() => {
+        const baseUrl = (httpClient.defaults.baseURL as string) || '';
+        if (!baseUrl) return;
+        const es = connectMindmapSSE({
+            baseUrl,
+            mapId: mindmap.id,
+            onMessage: (msg) => {
+                const t = msg?.type;
+                if (!t) return;
+                // If server pushes full list
+                if (t === 'USERS_UPDATE' && Array.isArray(msg.payload)) {
+                    setConnectedUsers(msg.payload as ConnectedUser[]);
+                }
+                // If server signals join/leave, refresh list
+                if (t === 'USER_JOINED' || t === 'USER_LEFT') {
+                    getConnectedUsers(mindmap.id).then((list) => setConnectedUsers(Array.isArray(list) ? list : [])).catch(() => {});
+                }
+            },
+            onError: () => {
+                // silent
+            },
+        });
+        return () => {
+            es.close();
+        };
+    }, [mindmap.id]);
 
     useEffect(() => {
         if (!diagramRef.current || diagramInstance.current) return;
@@ -137,27 +248,12 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
             layout.doLayout(parts);
         }
 
-        // 헬퍼: 호버 카드 표시/숨김
-        function showHoverForNode(node: go.Node) {
-            if (!diagramRef.current || !diagramInstance.current) return;
-            const d = diagramInstance.current;
-            const ptDoc = node.getDocumentPoint(go.Spot.Top); // 상단 가까이
-            const ptView = d.transformDocToView(ptDoc);
-            if (hoverHideTimer.current) { window.clearTimeout(hoverHideTimer.current); hoverHideTimer.current = null; }
-            setHoverCard({ visible: true, left: ptView.x + 8, top: Math.max(8, ptView.y - 8), text: node.data?.text || '' });
-        }
-        function hideHoverDelayed() {
-            if (hoverHideTimer.current) window.clearTimeout(hoverHideTimer.current);
-            hoverHideTimer.current = window.setTimeout(() => {
-                setHoverCard((prev) => prev.visible ? { ...prev, visible: false } : prev);
-                hoverHideTimer.current = null;
-            }, 180);
-        }
+        // hover helpers are component-scoped: showHoverForNode, hideHoverDelayed
 
         // 일반 노드 템플릿
         myDiagram.nodeTemplate = new go.Node('Vertical', {
                 selectionObjectName: 'TEXT',
-                mouseEnter: (e: go.InputEvent, obj: go.GraphObject) => {
+                mouseEnter: (_e: go.InputEvent, obj: go.GraphObject) => {
                     const n = obj.part as go.Node;
                     if (n) showHoverForNode(n);
                 },
@@ -190,7 +286,7 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                 shadowBlur: 10,
                 shadowColor: "rgba(0, 0, 0, .15)",
                 shadowOffset: new go.Point(3, 3),
-                mouseEnter: (e: go.InputEvent, obj: go.GraphObject) => {
+                mouseEnter: (_e: go.InputEvent, obj: go.GraphObject) => {
                     const n = obj.part as go.Node;
                     if (n) showHoverForNode(n);
                 },
@@ -339,6 +435,7 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                 onInvite={handleInvite}
                 onLeave={handleLeave}
                 onRename={handleRename}
+                connectedUsers={connectedUsers}
                 onDelete={async () => {
                     if (!window.confirm('정말 이 마인드맵을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
                     try {
@@ -372,8 +469,8 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                               <div
                                 className="absolute z-20 rounded-xl border border-slate-200 bg-white/95 shadow-lg px-3 py-2 text-xs text-slate-800"
                                 style={{ left: hoverCard.left, top: hoverCard.top }}
-                                onMouseEnter={() => { if (hoverHideTimer.current) { window.clearTimeout(hoverHideTimer.current); hoverHideTimer.current = null; } }}
-                                onMouseLeave={() => hideHoverDelayed()}
+                                onMouseEnter={cancelHoverHide}
+                                onMouseLeave={hideHoverDelayed}
                               >
                                 <div className="mb-1">해당 기능과 관련된 코드로 이동하시겠습니까?</div>
                                 <div className="flex justify-end">

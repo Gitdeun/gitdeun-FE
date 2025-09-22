@@ -46,30 +46,38 @@ const MindmapPage: React.FC = () => {
 
   // 그래프 -> 트리 변환기
   function graphToTree(resp: MindmapDetailResponse): MindMapDataNode {
-    const nodes = new Map(resp.mindmapGraph.nodes.map(n => [n.key, n]));
+    const graph = resp?.mindmapGraph;
+    if (!graph || !Array.isArray(graph.nodes)) {
+      return { node: '(empty)', related_files: [], children: [] };
+    }
+    const nodes = new Map(graph.nodes.map(n => [n.key, n]));
     const childrenMap = new Map<string, string[]>();
     const hasParent = new Set<string>();
-    for (const e of resp.mindmapGraph.edges) {
-      if (!e.containmentEdge) continue;
+    for (const e of graph.edges || []) {
+      if (!e?.containmentEdge) continue;
+      if (!nodes.has(e.from) || !nodes.has(e.to)) continue;
       const arr = childrenMap.get(e.from) ?? [];
       arr.push(e.to);
       childrenMap.set(e.from, arr);
       hasParent.add(e.to);
     }
     let rootKey: string | undefined;
-    for (const n of resp.mindmapGraph.nodes) {
+    for (const n of graph.nodes) {
       const hasOut = childrenMap.has(n.key);
       if (!hasParent.has(n.key) && (hasOut || rootKey === undefined)) {
         rootKey = n.key;
       }
     }
     if (!rootKey) {
-      rootKey = resp.mindmapGraph.nodes[0]?.key;
+      rootKey = graph.nodes[0]?.key;
     }
     const build = (key: string): MindMapDataNode => {
-      const n = nodes.get(key)!;
-      const kids = (childrenMap.get(key) || []).map(build);
-      return { node: n.label, related_files: n.related_files, children: kids };
+      const n = nodes.get(key);
+      if (!n) return { node: '(unknown)', related_files: [], children: [] };
+      const kids = (childrenMap.get(key) || [])
+        .filter(childKey => nodes.has(childKey))
+        .map(build);
+      return { node: n.label ?? '(no label)', related_files: n.related_files || [], children: kids };
     };
     return build(rootKey!);
   }
@@ -84,6 +92,21 @@ const MindmapPage: React.FC = () => {
       } catch {}
     }, 800);
 
+    // keep latest page/size in refs for SSE refresh
+    const pageRef = { current: visitPage } as { current: number };
+    const sizeRef = { current: visitSize } as { current: number };
+    // update on change
+    pageRef.current = visitPage;
+    sizeRef.current = visitSize;
+
+    const refreshVisitsThrottled = throttle(async () => {
+      try {
+        const res = await getVisitHistory({ page: pageRef.current, size: sizeRef.current });
+        setVisitItems(res.content);
+        setVisitTotalPages(res.totalPages);
+      } catch {}
+    }, 800);
+
     const es = connectHistorySSE({
       baseUrl,
       onMessage: (msg) => {
@@ -91,6 +114,10 @@ const MindmapPage: React.FC = () => {
         if (!t) return;
         if (t === 'PIN_ADDED' || t === 'PIN_REMOVED' || t === 'REFRESH_PINS') {
           refreshPinnedThrottled();
+        }
+        // refresh visits on server-side lastVisitedAt update events
+        if (t === 'VISIT_UPDATED' || t === 'VISIT_ADDED' || t === 'REFRESH_VISITS') {
+          refreshVisitsThrottled();
         }
       },
       onError: () => {
@@ -100,7 +127,7 @@ const MindmapPage: React.FC = () => {
     return () => {
       es.close();
     };
-  }, []);
+  }, [visitPage, visitSize]);
 
   const lastFetchedIdRef = useRef<number | null>(null);
   useEffect(() => {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { X, Trash2, Info, Bell, CheckCheck, Loader2 } from "lucide-react";
 import {
   fetchNotifications,
@@ -8,7 +9,7 @@ import {
   type NotificationItem,
   type Page,
 } from "../../api/notification";
-import { acceptInvitation, deleteInvitation } from "../../api/mindmap";
+import { acceptInvitation, rejectInvitation } from "../../api/mindmap";
 import { toast } from "sonner";
 
 function timeAgo(iso: string) {
@@ -29,6 +30,7 @@ type Props = {
 };
 
 export default function NotificationsDrawer({ open, onClose, onChange }: Props) {
+  const navigate = useNavigate();
   const [page, setPage] = useState(0);
   const [data, setData] = useState<Page<NotificationItem> | null>(null);
   const [loading, setLoading] = useState(false);
@@ -164,9 +166,12 @@ export default function NotificationsDrawer({ open, onClose, onChange }: Props) 
                       <Trash2 size={16} />
                     </button>
 
-                    <button
-                      className="block w-full p-4 text-left"
+                    <div
+                      className="block w-full p-4 text-left cursor-pointer"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => handleClickItem(n)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClickItem(n); } }}
                     >
                       <div className="flex items-start gap-3">
                         <div className="mt-0.5 rounded-full bg-blue-50 p-1.5 text-blue-600">
@@ -187,16 +192,22 @@ export default function NotificationsDrawer({ open, onClose, onChange }: Props) 
                             <div className="mt-3 flex items-center gap-1.5">
                               <button
                                 className="px-2 py-1 text-[11px] rounded-md border bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-60"
-                                disabled={actingId === n.notificationId}
+                                disabled={actingId === n.notificationId || n.actionAvailable === false}
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   setActingId(n.notificationId);
                                   try {
-                                    await acceptInvitation(n.referenceId!);
+                                    const res = await acceptInvitation(n.referenceId!);
                                     toast.success('초대를 승인했습니다.');
-                                    try { await deleteNotification(n.notificationId); } catch {}
-                                    setData(prev => prev ? { ...prev, content: prev.content.filter(x => x.notificationId !== n.notificationId), totalElements: Math.max(0, prev.totalElements - 1) } : prev);
+                                    // Keep notification, just disable actions
+                                    setData(prev => prev ? {
+                                      ...prev,
+                                      content: prev.content.map(x => x.notificationId === n.notificationId ? { ...x, actionAvailable: false } : x)
+                                    } : prev);
                                     onChange?.();
+                                    if (res && typeof res.mindmapId === 'number') {
+                                      navigate(`/mindmap/${res.mindmapId}`);
+                                    }
                                   } catch (err: any) {
                                     const msg = err?.response?.data?.message || err?.message || '승인에 실패했습니다.';
                                     toast.error(msg);
@@ -207,16 +218,14 @@ export default function NotificationsDrawer({ open, onClose, onChange }: Props) 
                               >승인</button>
                               <button
                                 className="px-2 py-1 text-[11px] rounded-md border bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-60"
-                                disabled={actingId === n.notificationId}
+                                disabled={actingId === n.notificationId || n.actionAvailable === false}
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   setActingId(n.notificationId);
                                   try {
-                                    await deleteInvitation(n.referenceId!);
+                                    await rejectInvitation(n.referenceId!);
                                     toast.success('초대를 거절했습니다.');
-                                    // 서버에서도 알림 삭제
                                     try { await deleteNotification(n.notificationId); } catch {}
-                                    // 로컬에서도 제거
                                     setData(prev => prev ? { ...prev, content: prev.content.filter(x => x.notificationId !== n.notificationId), totalElements: Math.max(0, prev.totalElements - 1) } : prev);
                                     onChange?.();
                                   } catch (err: any) {
@@ -235,7 +244,7 @@ export default function NotificationsDrawer({ open, onClose, onChange }: Props) 
                           <span className="flex-none inline-block w-2 h-2 mt-1 bg-yellow-300 rounded-full" />
                         )}
                       </div>
-                    </button>
+                    </div>
                   </li>
                 ))}
               </ul>

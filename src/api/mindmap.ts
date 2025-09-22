@@ -55,41 +55,6 @@ export async function getMindmapDetail(mapId: number): Promise<MindmapDetailResp
   return res.data as MindmapDetailResponse;
 }
 
-// ================= SSE for Mindmap Creation =================
-export type MindmapSSEMessage = {
-  type: string; // e.g., 'MINDMAP_COMPLETED' | 'MINDMAP_FAILED' | 'PROGRESS'
-  processId?: string;
-  mindmapId?: number;
-  status?: 'PROCESSING' | 'COMPLETED' | 'FAILED';
-  message?: string;
-};
-
-export function connectMindmapSSE({
-  baseUrl,
-  onMessage,
-  onError,
-  withCredentials = true,
-}: {
-  baseUrl: string;
-  onMessage: (msg: MindmapSSEMessage) => void;
-  onError?: (ev: Event) => void;
-  withCredentials?: boolean;
-}) {
-  const url = `${baseUrl.replace(/\/$/, '')}/mindmaps/sse`;
-  const es = new EventSource(url, { withCredentials });
-  es.onmessage = (e) => {
-    try {
-      const data = JSON.parse(e.data);
-      onMessage(data as MindmapSSEMessage);
-    } catch (_) {
-      // ignore parse errors
-    }
-  };
-  es.onerror = (ev) => {
-    if (onError) onError(ev);
-  };
-  return es;
-}
 
 // ================= Update (PATCH) =================
 export async function updateMindmapTitle(mapId: number, title: string) {
@@ -166,6 +131,51 @@ export async function acceptInvitation(invitationId: number) {
 }
 
 export async function deleteInvitation(invitationId: number) {
-  const res = await httpClient.delete(`/invitations/${invitationId}/reject`);
+  const res = await httpClient.delete(`/invitations/${invitationId}`);
   return res.data;
+}
+
+// Realtime connected users
+export type ConnectedUser = {
+  userId: number;
+  nickname: string;
+  profileImage?: string;
+};
+
+export async function getConnectedUsers(mapId: number): Promise<ConnectedUser[]> {
+  const res = await httpClient.get(`/mindmaps/${mapId}/connections/users`);
+  return res.data as ConnectedUser[];
+}
+
+// Mindmap presence SSE
+export type MindmapSSEMessage = {
+  type: string;
+  payload?: any;
+};
+
+export function connectMindmapSSE({
+  baseUrl,
+  mapId,
+  onMessage,
+  onError,
+  withCredentials = true,
+}: {
+  baseUrl: string;
+  mapId: number;
+  onMessage: (msg: MindmapSSEMessage) => void;
+  onError?: (ev: Event) => void;
+  withCredentials?: boolean;
+}) {
+  const url = `${baseUrl.replace(/\/$/, '')}/mindmaps/${mapId}/sse`;
+  const es = new EventSource(url, { withCredentials });
+  es.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      onMessage(data as MindmapSSEMessage);
+    } catch {
+      // ignore
+    }
+  };
+  es.onerror = (ev) => { if (onError) onError(ev); };
+  return es;
 }
