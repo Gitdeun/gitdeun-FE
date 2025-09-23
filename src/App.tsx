@@ -10,27 +10,31 @@ import DetailPost from "./pages/post/DetailPost";
 import Layout from "./layouts/Layout";
 import OAuthCallback from "./pages/login/OAuthCallback";
 import { MyPage } from "./pages/mypage/Mypage.tsx";
+import { Toaster } from "sonner";
+import AcceptInvitation from "./pages/invitations/AcceptInvitation";
 
 function App() {
   return (
-    <Routes>
-      <Route path="/oauth/callback" element={<OAuthCallback />} />
+    <>
+      <Toaster position="top-right" richColors closeButton />
+      <Routes>
+        <Route path="/oauth/callback" element={<OAuthCallback />} />
 
-      <Route path="/" element={<Navigate to="/login" />} />
-      <Route element={<Layout />}>
-        <Route path="login" element={<Login />} />
-        <Route path="home" element={<Home />} />
-        <Route path="code" element={<Code />} />
-        <Route path="mindmap" element={<Mindmap />} />
-        <Route path="posts" element={<PostList />}/>
-        <Route path="post/new" element={<NewPost />}/>
-        <Route path="post/:id" element={<DetailPost />} />
-        <Route path="mypage" element={<MyPage />} />
-      </Route>
-      <Route path="mindmap/:id" element={<Mindmap />} />
-    </Routes>
-
-
+        <Route path="/" element={<Navigate to="/login" />} />
+        <Route element={<Layout />}>
+          <Route path="login" element={<Login />} />
+          <Route path="home" element={<Home />} />
+          <Route path="code" element={<Code />} />
+          <Route path="mindmap" element={<Mindmap />} />
+          <Route path="posts" element={<PostList />} />
+          <Route path="post/new" element={<NewPost />} />
+          <Route path="post/:id" element={<DetailPost />} />
+          <Route path="mypage" element={<MyPage />} />
+        </Route>
+        <Route path="mindmap/:id" element={<Mindmap />} />
+        <Route path="invitations/link/:token" element={<AcceptInvitation />} />
+      </Routes>
+    </>
   );
 }
 

@@ -15,22 +15,24 @@ export function openNotificationSSE(handlers: Handlers = {}) {
     console.warn("SSE: accessToken 없음");
     return { close: () => {} };
   }
-
-  const es = new EventSourcePolyfill(`${API_BASE}/api/notifications/sse`, {
+  // Prefer axios baseURL to guarantee same origin/port
+  const base = (httpClient.defaults.baseURL as string) || API_BASE;
+  const url = `${base.replace(/\/$/, '')}/notifications/sse`;
+  const es = new EventSourcePolyfill(url, {
     headers: { Authorization: `Bearer ${token}` },
     withCredentials: true,
     heartbeatTimeout: 60_000,
   });
 
   es.onopen = () => handlers.onOpen?.();
-  es.onmessage = (evt) => {
-    if (evt.data === "connected") return;
-    try {
-      handlers.onMessage?.(JSON.parse(evt.data));
-    } catch {
-      handlers.onMessage?.(evt.data);
-    }
+  const handle = (data: any) => {
+    if (data === "connected") return;
+    try { handlers.onMessage?.(JSON.parse(data)); }
+    catch { handlers.onMessage?.(data); }
   };
+  es.onmessage = (evt) => handle(evt.data);
+  // Some servers send named events
+  es.addEventListener?.('newNotification', (evt: MessageEvent) => handle((evt as any).data));
   es.onerror = (e) => handlers.onError?.(e);
 
   return { close: () => es.close() };

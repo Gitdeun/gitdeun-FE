@@ -1,17 +1,112 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import go from 'gojs';
 import { toast } from 'sonner';
 import {InviteModal} from "../../components/modal/InviteModal.tsx";
 import type {Mindmap, MindMapDataNode} from "../../types";
 import { Header } from './Header';
 import { ChatPanel } from './ChatPanel';
+import { updateMindmapTitle, deleteMindmap, getConnectedUsers, type ConnectedUser, connectMindmapSSE, getMindmapPromptHistories, type PromptHistoryItem, type PageResponse, getMindmapDetail, type MindmapGraphNode, type MindmapGraphEdge } from '../../api/mindmap';
+import httpClient from '../../api/httpClient';
 
+function HistoryList({ mapId }: { mapId: number; onUsePrompt: (p: string) => void }) {
+  const [items, setItems] = useState<PromptHistoryItem[]>([]);
+  const [page, setPage] = useState(0);
+  const [size] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const timeAgo = (iso: string) => {
+    const d = new Date(iso);
+    const diff = Date.now() - d.getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return '방금 전';
+    if (mins < 60) return `${mins}분 전`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}시간 전`;
+    const days = Math.floor(hrs / 24);
+    if (days < 7) return `${days}일 전`;
+    return d.toLocaleDateString();
+  };
+
+  useEffect(() => { setPage(0); }, [mapId]);
+
+  useEffect(() => {
+    const run = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await getMindmapPromptHistories(mapId, { page, size });
+        setItems((data as PageResponse<PromptHistoryItem>).content);
+        setTotalPages(Math.max(1, Number((data as PageResponse<PromptHistoryItem>).totalPages ?? 1)));
+      } catch (e: any) {
+        const msg = e?.response?.data?.message || e?.message || '히스토리를 불러오지 못했습니다.';
+        setError(msg);
+      } finally {
+        setLoading(false);
+      }
+    };
+    void run();
+  }, [mapId, page, size]);
+
+  return (
+    <div className="h-full w-full flex flex-col">
+      <div className="px-4 py-3.5 border-b border-neutral-200 bg-white/90 sticky top-0 z-10 flex items-center justify-between">
+        <div className="text-sm font-semibold text-sky-700">최근 프롬프트</div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-3">
+        {loading ? (
+          <div className="p-3 text-sm text-neutral-500">불러오는 중…</div>
+        ) : error ? (
+          <div className="p-3 text-sm text-red-600">{error}</div>
+        ) : items.length === 0 ? (
+          <div className="p-3 text-sm text-neutral-500">기록이 없습니다.</div>
+        ) : (
+          <ul className="space-y-2">
+            {items.map(h => (
+              <li key={h.historyId}>
+                <div className="group w-full text-left p-3 rounded-lg border border-neutral-200 bg-white hover:bg-sky-50/60 transition">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[11px] text-neutral-500 flex items-center gap-2">
+                      <span className={`inline-block h-1.5 w-1.5 rounded-full ${h.applied ? 'bg-emerald-500' : 'bg-neutral-300'}`}></span>
+                      <span>{timeAgo(h.createdAt)}</span>
+                    </div>
+                    
+                  </div>
+                  <div className="mt-1 text-[13px] font-medium text-neutral-800 line-clamp-2">{h.summary || h.prompt}</div>
+                  <div className="text-[12px] text-neutral-600 line-clamp-2">{h.prompt}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="p-2 flex items-center justify-center gap-3">
+        <button
+          className="px-3 py-1.5 text-xs rounded-full border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 disabled:opacity-50 disabled:hover:bg-sky-50"
+          disabled={page === 0}
+          onClick={() => setPage(p => Math.max(0, p - 1))}
+        >이전</button>
+        <span className="text-xs px-2 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+          {page + 1} / {Math.max(1, totalPages)}
+        </span>
+        <button
+          className="px-3 py-1.5 text-xs rounded-full border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 disabled:opacity-50 disabled:hover:bg-sky-50"
+          disabled={page + 1 >= totalPages}
+          onClick={() => setPage(p => p + 1)}
+        >다음</button>
+      </div>
+    </div>
+  );
+}
 
 const transformDataForMindMapSample = (data: MindMapDataNode) => {
     const nodeDataArray: go.ObjectData[] = [];
     let keyCounter = 0;
     const branchColors = ["#51a1e6", "#66d456", "#e57373", "#ff8a65", "#ba68c8", "#90a4ae"];
     type Direction = 'left' | 'right';
+
 
     function traverse(node: MindMapDataNode, parentKey: number | null, dir: Direction | null, brush: string) {
         const currentKey = keyCounter++;
@@ -44,7 +139,126 @@ const transformDataForMindMapSample = (data: MindMapDataNode) => {
 export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBack: () => void; }) {
     const diagramRef = useRef<HTMLDivElement>(null);
     const diagramInstance = useRef<go.Diagram | null>(null);
+    const overviewRef = useRef<HTMLDivElement>(null);
+    const overviewInstance = useRef<go.Overview | null>(null);
     const [inviteModalOpen, setInviteModalOpen] = useState(false);
+    const [chatOpen, setChatOpen] = useState(false);
+    const [historyOpen, setHistoryOpen] = useState(false);
+    const [title, setTitle] = useState(mindmap.title);
+    const [lastHistoryMaxCreatedAt, setLastHistoryMaxCreatedAt] = useState<string | null>(null);
+    const [graphAllNodes, setGraphAllNodes] = useState<MindmapGraphNode[] | null>(null);
+    const [suggestionNodes, setSuggestionNodes] = useState<MindmapGraphNode[] | null>(null);
+    const [suggestionEdges, setSuggestionEdges] = useState<MindmapGraphEdge[] | null>(null);
+    const [showSuggestions] = useState(true);
+    useEffect(() => { setTitle(mindmap.title); }, [mindmap.title]);
+    const navigate = useNavigate();
+  const [hoverCard, setHoverCard] = useState<{ visible: boolean; left: number; top: number; text: string }>(() => ({ visible: false, left: 0, top: 0, text: '' }));
+  const hoverHideTimer = useRef<number | null>(null);
+    const [connectedUsers, setConnectedUsers] = useState<ConnectedUser[]>([]);
+
+  const cancelHoverHide = () => {
+    if (hoverHideTimer.current) {
+      window.clearTimeout(hoverHideTimer.current);
+      hoverHideTimer.current = null;
+    }
+  };
+  const hideHoverDelayed = () => {
+    if (hoverHideTimer.current) window.clearTimeout(hoverHideTimer.current);
+    hoverHideTimer.current = window.setTimeout(() => {
+      setHoverCard((prev) => (prev.visible ? { ...prev, visible: false } : prev));
+      hoverHideTimer.current = null;
+    }, 180);
+  };
+  const showHoverForNode = (node: go.Node) => {
+    if (!diagramRef.current || !diagramInstance.current) return;
+    const d = diagramInstance.current;
+    const ptDoc = node.getDocumentPoint(go.Spot.Top);
+    const ptView = d.transformDocToView(ptDoc);
+    cancelHoverHide();
+    setHoverCard({ visible: true, left: ptView.x + 8, top: Math.max(8, ptView.y - 8), text: (node.data as any)?.text || '' });
+  };
+
+    // Poll connected users every 10s
+    useEffect(() => {
+        let cancelled = false;
+        let timer: number | null = null;
+        const load = async () => {
+            try {
+                const list = await getConnectedUsers(mindmap.id);
+                if (!cancelled) setConnectedUsers(Array.isArray(list) ? list : []);
+            } catch {
+                if (!cancelled) setConnectedUsers([]);
+            }
+        };
+        void load();
+        timer = window.setInterval(() => { void load(); }, 10000);
+        return () => {
+            cancelled = true;
+            if (timer) window.clearInterval(timer);
+        };
+    }, [mindmap.id]);
+
+    // Poll latest prompt histories to detect completion and notify ChatPanel
+    useEffect(() => {
+        let timer: number | null = null;
+
+        const checkLatestHistory = async () => {
+            try {
+                const data = await getMindmapPromptHistories(mindmap.id, { page: 0, size: 5 });
+                const content = (data as PageResponse<PromptHistoryItem>).content;
+                if (Array.isArray(content) && content.length > 0) {
+                    const newest = content.reduce((acc, cur) => acc && new Date(acc.createdAt) > new Date(cur.createdAt) ? acc : cur);
+                    const newestAt = newest.createdAt;
+                    if (lastHistoryMaxCreatedAt === null) {
+                        setLastHistoryMaxCreatedAt(newestAt);
+                    } else if (new Date(newestAt).getTime() > new Date(lastHistoryMaxCreatedAt).getTime()) {
+                        setLastHistoryMaxCreatedAt(newestAt);
+                        // Dispatch event so ChatPanel can append the assistant message
+                        window.dispatchEvent(new Event('mindmap:analysis_prompt'));
+                    }
+                }
+            } catch {
+                // ignore errors silently
+            }
+        };
+
+        // initial check
+        void checkLatestHistory();
+        // poll every 6s
+        timer = window.setInterval(() => { void checkLatestHistory(); }, 6000);
+
+        return () => {
+            if (timer) window.clearInterval(timer);
+        };
+    }, [mindmap.id, lastHistoryMaxCreatedAt]);
+
+    // Open presence SSE for this mindmap
+    useEffect(() => {
+        const baseUrl = (httpClient.defaults.baseURL as string) || '';
+        if (!baseUrl) return;
+        const es = connectMindmapSSE({
+            baseUrl,
+            mapId: mindmap.id,
+            onMessage: (msg) => {
+                const t = msg?.type;
+                if (!t) return;
+                // If server pushes full list
+                if (t === 'USERS_UPDATE' && Array.isArray(msg.payload)) {
+                    setConnectedUsers(msg.payload as ConnectedUser[]);
+                }
+                // If server signals join/leave, refresh list
+                if (t === 'USER_JOINED' || t === 'USER_LEFT') {
+                    getConnectedUsers(mindmap.id).then((list) => setConnectedUsers(Array.isArray(list) ? list : [])).catch(() => {});
+                }
+            },
+            onError: () => {
+                // silent
+            },
+        });
+        return () => {
+            es.close();
+        };
+    }, [mindmap.id]);
 
     useEffect(() => {
         if (!diagramRef.current || diagramInstance.current) return;
@@ -57,6 +271,9 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
             initialContentAlignment: go.Spot.Center,
         });
         diagramInstance.current = myDiagram;
+
+        // 마우스 휠 중심 확대 활성화
+        myDiagram.toolManager.mouseWheelBehavior = go.ToolManager.WheelZoom;
 
         // --- GoJS 헬퍼 함수들 ---
         function spotConverter(dir: string, from: boolean) {
@@ -125,12 +342,31 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
             layout.doLayout(parts);
         }
 
+
         // 일반 노드 템플릿
-        myDiagram.nodeTemplate = new go.Node('Vertical', { selectionObjectName: 'TEXT' })
+        myDiagram.nodeTemplate = new go.Node('Vertical', {
+                selectionObjectName: 'TEXT',
+                mouseEnter: (_e: go.InputEvent, obj: go.GraphObject) => {
+                    const n = obj.part as go.Node;
+                    if (n) showHoverForNode(n);
+                },
+                mouseLeave: (_e: go.InputEvent, _obj: go.GraphObject) => {
+                    hideHoverDelayed();
+                },
+            })
             .bindTwoWay('location', 'loc', go.Point.parse, go.Point.stringify)
             .bind('locationSpot', 'dir', (d) => spotConverter(d, false))
             .add(
-                new go.TextBlock({ name: 'TEXT', minSize: new go.Size(30, 15), editable: true, font: '16px Inter, sans-serif' }).bindTwoWay('text').bindTwoWay('scale').bindTwoWay('font'),
+                new go.TextBlock({
+                    name: 'TEXT',
+                    minSize: new go.Size(30, 15),
+                    editable: true,
+                    font: '16px Inter, sans-serif',
+                    maxLines: 2,
+                    overflow: go.TextOverflow.Ellipsis,
+                    // 기본 툴팁 대신 React 오버레이 사용
+                })
+                  .bindTwoWay('text').bindTwoWay('scale').bindTwoWay('font'),
                 new go.Shape('LineH', { stretch: go.Stretch.Horizontal, strokeWidth: 3, height: 3, portId: '', fromSpot: go.Spot.LeftRightSides, toSpot: go.Spot.LeftRightSides })
                     .bind('stroke', 'brush').bind('fromSpot', 'dir', (d) => spotConverter(d, true)).bind('toSpot', 'dir', (d) => spotConverter(d, false))
             );
@@ -143,6 +379,11 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                 shadowBlur: 10,
                 shadowColor: "rgba(0, 0, 0, .15)",
                 shadowOffset: new go.Point(3, 3),
+                mouseEnter: (_e: go.InputEvent, obj: go.GraphObject) => {
+                    const n = obj.part as go.Node;
+                    if (n) showHoverForNode(n);
+                },
+                mouseLeave: (_e: go.InputEvent, _obj: go.GraphObject) => { hideHoverDelayed(); },
             })
             .bindTwoWay('location', 'loc', go.Point.parse, go.Point.stringify)
             .add(
@@ -162,6 +403,39 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                     stroke: "#212529",
                     margin: 12,
                     editable: true,
+                    maxLines: 2,
+                    overflow: go.TextOverflow.Ellipsis,
+                    // 기본 툴팁 대신 React 오버레이 사용
+                }).bindTwoWay("text")
+            )
+        );
+
+        // Suggestion node template (AI 추천)
+        myDiagram.nodeTemplateMap.add("Suggestion",
+            new go.Node("Auto", {
+                selectionObjectName: "TEXT",
+                isLayoutPositioned: false,
+                mouseEnter: (_e: go.InputEvent, obj: go.GraphObject) => { const n = obj.part as go.Node; if (n) showHoverForNode(n); },
+                mouseLeave: (_e: go.InputEvent) => { hideHoverDelayed(); },
+            })
+            .bindTwoWay('location', 'loc', go.Point.parse, go.Point.stringify)
+            .add(
+                new go.Shape("RoundedRectangle", {
+                    fill: "#F8FAFC",
+                    stroke: "#94A3B8",
+                    strokeWidth: 1.5,
+                    strokeDashArray: [6, 4],
+                    portId: "",
+                    fromSpot: go.Spot.AllSides,
+                    toSpot: go.Spot.AllSides,
+                }),
+                new go.TextBlock({
+                    name: "TEXT",
+                    font: "italic 14px Inter, sans-serif",
+                    stroke: "#0F172A",
+                    margin: 8,
+                    maxLines: 2,
+                    overflow: go.TextOverflow.Ellipsis,
                 }).bindTwoWay("text")
             )
         );
@@ -184,14 +458,23 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                 go.GraphObject.build('ContextMenuButton', { click: (_e, obj) => changeTextSize(obj, 1.1) }).add(new go.TextBlock('Bigger')),
                 go.GraphObject.build('ContextMenuButton', { click: (_e, obj) => changeTextSize(obj, 1 / 1.1) }).add(new go.TextBlock('Smaller')),
                 go.GraphObject.build('ContextMenuButton', { click: (_e, obj) => toggleTextWeight(obj) }).add(new go.TextBlock('Bold/Normal')),
+                go.GraphObject.build('ContextMenuButton', { click: (e) => { const n = e.diagram.selection.first() as go.Node; if (n) e.diagram.commandHandler.collapseTree(n); } }).add(new go.TextBlock('Collapse subtree')),
+                go.GraphObject.build('ContextMenuButton', { click: (e) => { const n = e.diagram.selection.first() as go.Node; if (n) e.diagram.commandHandler.expandTree(n); } }).add(new go.TextBlock('Expand subtree')),
                 go.GraphObject.build('ContextMenuButton', { click: (e) => {
                     const selectedNode = e.diagram.selection.first() as go.Node;
                     if (selectedNode) layoutTree(selectedNode);
                 }}).add(new go.TextBlock('Layout'))
             );
 
+        // Default link for normal nodes
         myDiagram.linkTemplate = new go.Link({ curve: go.Curve.Bezier, fromShortLength: -2, toShortLength: -2, selectable: false })
             .add(new go.Shape({ strokeWidth: 3 }).bind('stroke', 'brush', (brush, link) => (link as go.Link).toNode?.data.brush || brush));
+
+        // Lighter/dashed link for suggestions
+        myDiagram.linkTemplateMap.add("SuggestionLink",
+            new go.Link({ curve: go.Curve.Bezier, fromShortLength: -2, toShortLength: -2, selectable: false })
+                .add(new go.Shape({ stroke: "#94A3B8", strokeWidth: 2, strokeDashArray: [6, 4] }))
+        );
 
         myDiagram.addDiagramListener('SelectionMoved', () => {
             const root = myDiagram.findNodeForKey(0);
@@ -211,44 +494,310 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
         myDiagram.model = new go.TreeModel(nodeDataArray);
         layoutAll();
 
-        myDiagram.scale = 1.2; 
-        const rootForCenter = myDiagram.findTreeRoots().first();
-        if (rootForCenter) {
-            myDiagram.centerRect(rootForCenter.actualBounds);
-        } else {
-            myDiagram.centerRect(myDiagram.documentBounds);
+        // 초기에는 루트 2레벨 이하 접기
+        myDiagram.nodes.each((n) => {
+            if (n.findTreeLevel() >= 2) {
+                (myDiagram.model as go.TreeModel).setDataProperty(n.data, 'isTreeExpanded', false);
+            }
+        });
+
+        // 화면에 맞춤 및 약간 여백
+        myDiagram.zoomToFit();
+        myDiagram.scale = myDiagram.scale * 1.05;
+
+        // 선택 서브트리 외 영역 흐리게
+        myDiagram.addDiagramListener('ChangedSelection', () => {
+            const sel = myDiagram.selection.first() as go.Node | null;
+            if (!sel) {
+                myDiagram.nodes.each(n => (n.opacity = 1));
+                myDiagram.links.each(l => (l.opacity = 1));
+                return;
+            }
+            const visible = new go.Set<go.Part>();
+            visible.add(sel);
+            sel.findTreeParts().each(p => visible.add(p));
+            myDiagram.nodes.each(n => { n.opacity = visible.contains(n) ? 1 : 0.3; });
+            myDiagram.links.each(l => { l.opacity = visible.contains(l) ? 1 : 0.15; });
+        });
+
+        // 미니맵 (중복 생성 방지)
+        if (overviewRef.current && !overviewInstance.current) {
+            overviewInstance.current = new go.Overview(overviewRef.current);
+            overviewInstance.current.observed = myDiagram;
         }
 
+        // cleanup
         return () => {
             if (diagramInstance.current) {
                 diagramInstance.current.div = null;
                 diagramInstance.current = null;
             }
+            if (overviewInstance.current) {
+                overviewInstance.current.observed = null as unknown as go.Diagram;
+                overviewInstance.current.div = null as unknown as HTMLDivElement;
+                overviewInstance.current = null;
+            }
         };
     }, [mindmap]);
+
+    // Fetch suggestion graph (AI 추천 노드/엣지)
+    useEffect(() => {
+        let mounted = true;
+        const run = async () => {
+            try {
+                const detail = await getMindmapDetail(mindmap.id);
+                const nodes = detail.mindmapGraph?.nodes || [];
+                const edges = detail.mindmapGraph?.edges || [];
+                const sugNodes = nodes.filter(n => n.node_type === 'suggestion' || n.suggestionNode);
+                const sugEdges = edges.filter(e => e.suggestionEdge);
+                if (mounted) {
+                    setGraphAllNodes(nodes);
+                    setSuggestionNodes(sugNodes);
+                    setSuggestionEdges(sugEdges);
+                }
+            } catch {
+                if (mounted) { setGraphAllNodes([]); setSuggestionNodes([]); setSuggestionEdges([]); }
+            }
+        };
+        void run();
+        return () => { mounted = false; };
+    }, [mindmap.id]);
+
+    // Render suggestion nodes into GoJS diagram
+    useEffect(() => {
+        const d = diagramInstance.current;
+        if (!d || !suggestionNodes || !suggestionEdges || !graphAllNodes) return;
+        if (!showSuggestions) {
+            // Remove existing suggestion nodes when toggled off
+            d.startTransaction('Remove Suggestions');
+            const model = d.model as go.TreeModel;
+            const toRemove: any[] = [];
+            (model.nodeDataArray as any[]).forEach(nd => { if (nd.category === 'Suggestion') toRemove.push(nd); });
+            toRemove.forEach(nd => model.removeNodeData(nd));
+            d.commitTransaction('Remove Suggestions');
+            return;
+        }
+        const model = d.model as go.TreeModel;
+        // Build label -> key map from existing diagram nodes
+        const labelToKey = new Map<string, number | string>();
+        (model.nodeDataArray as any[]).forEach(nd => {
+            if (nd.text != null) labelToKey.set(String(nd.text), nd.key);
+        });
+        // Build a map from graph key -> label (from full graph)
+        const graphKeyToLabel = new Map<string, string>();
+        graphAllNodes.forEach(n => graphKeyToLabel.set(n.key, n.label));
+
+        // Remove existing suggestion nodes to avoid duplicates
+        d.startTransaction('Refresh Suggestions');
+        const toRemove: any[] = [];
+        (model.nodeDataArray as any[]).forEach(nd => { if (nd.category === 'Suggestion') toRemove.push(nd); });
+        toRemove.forEach(nd => model.removeNodeData(nd));
+
+        // Compute next unique numeric key
+        let maxKey = 0;
+        (model.nodeDataArray as any[]).forEach(nd => { const k = Number(nd.key); if (!Number.isNaN(k)) maxKey = Math.max(maxKey, k); });
+        let nextKey = maxKey + 1;
+
+        suggestionNodes.forEach(sn => {
+            const parentEdge = suggestionEdges.find(e => e.to === sn.key || e.from === sn.key);
+            let parentKey: any = null;
+            if (parentEdge) {
+                const otherKey = parentEdge.to === sn.key ? parentEdge.from : parentEdge.to;
+                const parentLabel = graphKeyToLabel.get(otherKey);
+                if (parentLabel && labelToKey.has(parentLabel)) {
+                    parentKey = labelToKey.get(parentLabel)!;
+                }
+            }
+            if (parentKey == null) {
+                // fallback to root
+                parentKey = 0;
+            }
+            // Find parent's dir to align
+            const parentNode = d.findNodeForKey(parentKey) as go.Node | null;
+            const pdir = parentNode?.data?.dir || 'right';
+            const newData: go.ObjectData = { key: nextKey++, text: sn.label, category: 'Suggestion', dir: pdir, parent: parentKey, linkCategory: 'SuggestionLink' };
+            model.addNodeData(newData);
+        });
+        d.commitTransaction('Refresh Suggestions');
+        // Relayout after adding
+        const root = d.findNodeForKey(0);
+        if (root) {
+            (d as any).layoutDiagram ? (d as any).layoutDiagram() : d.zoomToFit();
+        }
+        // Position suggestion nodes near their parent with staggered offsets
+        d.startTransaction('Position Suggestions');
+        const groups = new Map<any, any[]>();
+        (model.nodeDataArray as any[]).forEach(nd => {
+            if (nd.category === 'Suggestion' && nd.parent != null) {
+                const arr = groups.get(nd.parent) || [];
+                arr.push(nd);
+                groups.set(nd.parent, arr);
+            }
+        });
+        groups.forEach((arr, pkey) => {
+            const parentNode = d.findNodeForKey(pkey) as go.Node | null;
+            if (!parentNode) return;
+            const base = parentNode.location.copy();
+            const dir = parentNode.data?.dir || 'right';
+            const dx = dir === 'left' ? -180 : 180; // horizontal offset
+            const gap = 46; // vertical gap between suggestions
+            const startY = base.y - ((arr.length - 1) * gap) / 2;
+            arr.forEach((nd, i) => {
+                const loc = new go.Point(base.x + dx, startY + i * gap);
+                model.setDataProperty(nd, 'loc', go.Point.stringify(loc));
+            });
+        });
+        d.commitTransaction('Position Suggestions');
+    }, [suggestionNodes, suggestionEdges, graphAllNodes, showSuggestions]);
 
     const handleInvite = () => setInviteModalOpen(true);
     const handleLeave = () => {
         if (window.confirm("정말로 프로젝트를 나가시겠습니까?")) { toast.info("프로젝트에서 나갔습니다."); }
     };
 
+    const handleRename = async (nextTitle: string) => {
+        try {
+            await updateMindmapTitle(mindmap.id, nextTitle);
+            setTitle(nextTitle);
+            toast.success('제목이 수정되었습니다.');
+        } catch (e: any) {
+            const msg = e?.response?.data?.message || e?.message || '제목 수정에 실패했습니다.';
+            toast.error(msg);
+            throw e;
+        }
+    };
+
     return (
         <div className="h-screen flex flex-col bg-gradient-to-b from-slate-50 to-slate-100">
-            <Header projectName={mindmap.title} onBack={onBack} onInvite={handleInvite} onLeave={handleLeave} />
+            <Header
+                projectName={title}
+                onBack={onBack}
+                onInvite={handleInvite}
+                onLeave={handleLeave}
+                onRename={handleRename}
+                connectedUsers={connectedUsers}
+                onDelete={async () => {
+                    if (!window.confirm('정말 이 마인드맵을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
+                    try {
+                        await deleteMindmap(mindmap.id);
+                        toast.success('마인드맵이 삭제되었습니다.');
+                        onBack();
+                    } catch (e: any) {
+                        const msg = e?.response?.data?.message || e?.message || '마인드맵 삭제에 실패했습니다.';
+                        toast.error(msg);
+                    }
+                }}
+            />
             <div className="flex-1 flex overflow-hidden">
                 <div className="relative flex flex-col flex-1">
                     {/* Diagram surface container */}
                     <div className="flex-1 p-2 md:p-2.5 lg:p-3.5">
-                        <div className="h-full w-full bg-white rounded-xl border border-neutral-200 shadow">
+                        <div className="h-full w-full bg-white rounded-xl border border-neutral-200 shadow relative">
+                            {/* Zoom controls */}
+                            <div className="absolute top-3 right-3 z-10 flex gap-2">
+                                <button onClick={() => diagramInstance.current?.commandHandler.increaseZoom()} className="px-2.5 py-1.5 text-xs rounded-md bg-white/90 border shadow">+</button>
+                                <button onClick={() => diagramInstance.current?.commandHandler.decreaseZoom()} className="px-2.5 py-1.5 text-xs rounded-md bg-white/90 border shadow">-</button>
+                                <button onClick={() => diagramInstance.current?.zoomToFit()} className="px-2.5 py-1.5 text-xs rounded-md bg-white/90 border shadow">맞춤</button>
+                                <button onClick={() => { const d = diagramInstance.current; if (d) d.centerRect(d.documentBounds); }} className="px-2.5 py-1.5 text-xs rounded-md bg-white/90 border shadow">센터</button>
+                            </div>
+                            {/* Diagram canvas */}
                             <div ref={diagramRef} className="h-full w-full rounded-xl" />
+                            {/* Overview minimap */}
+                            <div ref={overviewRef} className="absolute bottom-3 right-3 w-48 h-32 bg-white/80 border border-neutral-200 rounded-lg shadow" />
+                            {/* Hover overlay */}
+                            {hoverCard.visible && (
+                              <div
+                                className="absolute z-20 rounded-xl border border-slate-200 bg-white/95 shadow-lg px-3 py-2 text-xs text-slate-800"
+                                style={{ left: hoverCard.left, top: hoverCard.top }}
+                                onMouseEnter={cancelHoverHide}
+                                onMouseLeave={hideHoverDelayed}
+                              >
+                                <div className="mb-1">해당 기능과 관련된 코드로 이동하시겠습니까?</div>
+                                <div className="flex justify-end">
+                                  <button
+                                    className="px-2.5 py-1 rounded-md border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
+                                    onClick={() => navigate('/code')}
+                                  >이동</button>
+                                </div>
+                              </div>
+                            )}
                         </div>
                     </div>
                 </div>
-                <div className="border-l border-neutral-200 bg-white/70 backdrop-blur-sm w-[380px] min-w-[320px] max-w-[460px]">
-                    <ChatPanel />
+                <div className="relative border-l border-neutral-200 w-12 min-w-[48px] sm:w-14 sm:min-w-[56px] bg-white">
+                  <div className="h-full flex flex-col items-center py-3 gap-2">
+                    <div className="h-8 w-8 rounded-lg bg-sky-600 text-white grid place-items-center text-sm font-bold select-none">AI</div>
+                    <div className="my-1 w-6 h-px bg-neutral-200" />
+                    <button className="w-9 h-9 rounded-lg hover:bg-neutral-100 grid place-items-center" title="새 채팅" onClick={() => { setChatOpen(true); setHistoryOpen(false); }}>
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path d="M12 5v14M5 12h14" strokeLinecap="round"/></svg>
+                    </button>
+                    <button className="w-9 h-9 rounded-lg hover:bg-neutral-100 grid place-items-center" title="히스토리" onClick={() => { setHistoryOpen(true); setChatOpen(false); }}>
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path d="M4 19V7a2 2 0 0 1 2-2h10"/><rect x="8" y="5" width="12" height="14" rx="2"/></svg>
+                    </button>
+                    <div className="mt-2 w-6 h-px bg-neutral-200" />
+                    <div className="flex-1 overflow-y-auto w-full flex flex-col items-center gap-1 pt-1">
+                    </div>
+                    <button
+                      className="mb-2 w-9 h-9 rounded-lg grid place-items-center bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100"
+                      title="AI 패널 열기"
+                      onClick={() => { setChatOpen(true); setHistoryOpen(false); }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </button>
+                  </div>
+                  {/* Slide-out Chat overlay */}
+                  <div className={`pointer-events-none absolute inset-0 right-0 ${chatOpen ? 'z-30' : 'z-[-1]'}`}>
+                    {/* Backdrop */}
+                    <div
+                      className={`pointer-events-auto fixed inset-0 ${chatOpen ? 'bg-black/20' : 'bg-transparent'} transition-colors duration-200`}
+                      onClick={() => setChatOpen(false)}
+                    />
+                    <div
+                      className={`pointer-events-auto fixed right-0 top-0 h-full bg-white shadow-xl border-l border-neutral-200 transition-transform duration-300 w-full sm:w-[360px] md:w-[420px] lg:w-[480px] max-w-[95vw] ${chatOpen ? 'translate-x-0' : 'translate-x-full'}`}
+                      role="dialog"
+                      aria-label="AI Chat Panel"
+                    >
+                      <div className="absolute left-[-14px] top-4">
+                        <button
+                          className="h-7 w-7 rounded-full border border-neutral-300 bg-white shadow hover:bg-neutral-50 flex items-center justify-center"
+                          title="닫기"
+                          onClick={() => setChatOpen(false)}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        </button>
+                      </div>
+                      <div className="h-full">
+                        <ChatPanel mapId={mindmap.id} showHistory={false} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Slide-out History overlay (separate from chat) */}
+                  <div className={`pointer-events-none absolute inset-0 right-0 ${historyOpen ? 'z-20' : 'z-[-1]'}`}>
+                    <div
+                      className={`pointer-events-auto fixed inset-0 ${historyOpen ? 'bg-black/10' : 'bg-transparent'} transition-colors duration-200`}
+                      onClick={() => setHistoryOpen(false)}
+                    />
+                    <div
+                      className={`pointer-events-auto fixed right-0 top-0 h-full bg-white shadow-xl border-l border-neutral-200 transition-transform duration-300 w-full sm:w-[300px] md:w-[360px] lg:w-[400px] max-w-[95vw] ${historyOpen ? 'translate-x-0' : 'translate-x-full'}`}
+                      role="dialog"
+                      aria-label="Prompt History Panel"
+                    >
+                      <div className="absolute left-[-14px] top-4">
+                        <button
+                          className="h-7 w-7 rounded-full border border-neutral-300 bg-white shadow hover:bg-neutral-50 flex items-center justify-center"
+                          title="닫기"
+                          onClick={() => setHistoryOpen(false)}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        </button>
+                      </div>
+                      <HistoryList mapId={mindmap.id} onUsePrompt={() => { setChatOpen(true); setHistoryOpen(false); }} />
+                    </div>
+                  </div>
                 </div>
             </div>
-            <InviteModal open={inviteModalOpen} onOpenChange={setInviteModalOpen} />
+            <InviteModal open={inviteModalOpen} onOpenChange={setInviteModalOpen} mapId={mindmap.id} mindmapTitle={mindmap.title} />
         </div>
     );
 }

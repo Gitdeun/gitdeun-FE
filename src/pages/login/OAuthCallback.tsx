@@ -13,11 +13,16 @@ export default function OAuthCallback() {
 
     if (token) {
       localStorage.setItem("accessToken", token);
-
-      navigate("/mindmap", {
-        state: { showTechStackModal: true },
-        replace: true,
-      });
+      const redirect = localStorage.getItem('postLoginRedirect');
+      if (redirect) {
+        localStorage.removeItem('postLoginRedirect');
+        navigate(redirect, { replace: true });
+      } else {
+        navigate("/mindmap", {
+          state: { showTechStackModal: true },
+          replace: true,
+        });
+      }
     }
   }, [navigate]);
 
