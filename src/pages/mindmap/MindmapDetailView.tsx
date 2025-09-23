@@ -3,138 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import go from 'gojs';
 import { toast } from 'sonner';
 import {InviteModal} from "../../components/modal/InviteModal.tsx";
-import type {Mindmap, MindMapDataNode} from "../../types";
+import type {Mindmap} from "../../types";
 import { Header } from './Header';
 import { ChatPanel } from './ChatPanel';
-import { updateMindmapTitle, deleteMindmap, getConnectedUsers, type ConnectedUser, connectMindmapSSE, getMindmapPromptHistories, type PromptHistoryItem, type PageResponse, getMindmapDetail, type MindmapGraphNode, type MindmapGraphEdge } from '../../api/mindmap';
+import { HistoryList } from './components/HistoryList';
+import { transformDataForMindMapSample } from './utils/transform';
+import { renderAggregatedSuggestions } from './diagram/renderSuggestions';
+import { updateMindmapTitle, deleteMindmap, getConnectedUsers, type ConnectedUser, connectMindmapSSE, getMindmapPromptHistories, type PromptHistoryItem, type PageResponse, getMindmapDetail, type MindmapGraphNode } from '../../api/mindmap';
 import httpClient from '../../api/httpClient';
-
-function HistoryList({ mapId }: { mapId: number; onUsePrompt: (p: string) => void }) {
-  const [items, setItems] = useState<PromptHistoryItem[]>([]);
-  const [page, setPage] = useState(0);
-  const [size] = useState(10);
-  const [totalPages, setTotalPages] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const timeAgo = (iso: string) => {
-    const d = new Date(iso);
-    const diff = Date.now() - d.getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return '방금 전';
-    if (mins < 60) return `${mins}분 전`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}시간 전`;
-    const days = Math.floor(hrs / 24);
-    if (days < 7) return `${days}일 전`;
-    return d.toLocaleDateString();
-  };
-
-  useEffect(() => { setPage(0); }, [mapId]);
-
-  useEffect(() => {
-    const run = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await getMindmapPromptHistories(mapId, { page, size });
-        setItems((data as PageResponse<PromptHistoryItem>).content);
-        setTotalPages(Math.max(1, Number((data as PageResponse<PromptHistoryItem>).totalPages ?? 1)));
-      } catch (e: any) {
-        const msg = e?.response?.data?.message || e?.message || '히스토리를 불러오지 못했습니다.';
-        setError(msg);
-      } finally {
-        setLoading(false);
-      }
-    };
-    void run();
-  }, [mapId, page, size]);
-
-  return (
-    <div className="flex flex-col w-full h-full">
-      <div className="px-4 py-3.5 border-b border-neutral-200 bg-white/90 sticky top-0 z-10 flex items-center justify-between">
-        <div className="text-sm font-semibold text-sky-700">최근 프롬프트</div>
-      </div>
-      <div className="flex-1 p-3 overflow-y-auto">
-        {loading ? (
-          <div className="p-3 text-sm text-neutral-500">불러오는 중…</div>
-        ) : error ? (
-          <div className="p-3 text-sm text-red-600">{error}</div>
-        ) : items.length === 0 ? (
-          <div className="p-3 text-sm text-neutral-500">기록이 없습니다.</div>
-        ) : (
-          <ul className="space-y-2">
-            {items.map(h => (
-              <li key={h.historyId}>
-                <div className="w-full p-3 text-left transition bg-white border rounded-lg group border-neutral-200 hover:bg-sky-50/60">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-[11px] text-neutral-500 flex items-center gap-2">
-                      <span className={`inline-block h-1.5 w-1.5 rounded-full ${h.applied ? 'bg-emerald-500' : 'bg-neutral-300'}`}></span>
-                      <span>{timeAgo(h.createdAt)}</span>
-                    </div>
-                    
-                  </div>
-                  <div className="mt-1 text-[13px] font-medium text-neutral-800 line-clamp-2">{h.summary || h.prompt}</div>
-                  <div className="text-[12px] text-neutral-600 line-clamp-2">{h.prompt}</div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      <div className="flex items-center justify-center gap-3 p-2">
-        <button
-          className="px-3 py-1.5 text-xs rounded-full border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 disabled:opacity-50 disabled:hover:bg-sky-50"
-          disabled={page === 0}
-          onClick={() => setPage(p => Math.max(0, p - 1))}
-        >이전</button>
-        <span className="px-2 py-1 text-xs border rounded-full bg-sky-50 text-sky-700 border-sky-200">
-          {page + 1} / {Math.max(1, totalPages)}
-        </span>
-        <button
-          className="px-3 py-1.5 text-xs rounded-full border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 disabled:opacity-50 disabled:hover:bg-sky-50"
-          disabled={page + 1 >= totalPages}
-          onClick={() => setPage(p => p + 1)}
-        >다음</button>
-      </div>
-    </div>
-  );
-}
-
-const transformDataForMindMapSample = (data: MindMapDataNode) => {
-    const nodeDataArray: go.ObjectData[] = [];
-    let keyCounter = 0;
-    const branchColors = ["#51a1e6", "#66d456", "#e57373", "#ff8a65", "#ba68c8", "#90a4ae"];
-    type Direction = 'left' | 'right';
-
-
-    function traverse(node: MindMapDataNode, parentKey: number | null, dir: Direction | null, brush: string) {
-        const currentKey = keyCounter++;
-        const nodeData: go.ObjectData = {
-            key: currentKey,
-            ...(parentKey !== null && { parent: parentKey }),
-            text: node.node,
-            brush: brush,
-            dir: dir,
-        };
-        if (parentKey === null) {
-            nodeData.category = "Root";
-        }
-        nodeDataArray.push(nodeData);
-        node.children?.forEach((child, index) => {
-            if (parentKey === null) {
-                const newBrush = branchColors[index % branchColors.length];
-                const newDir: Direction = index % 2 === 0 ? 'right' : 'left';
-                traverse(child, currentKey, newDir, newBrush);
-            } else {
-                traverse(child, currentKey, dir, brush);
-            }
-        });
-    }
-    traverse(data, null, null, 'black');
-    return nodeDataArray;
-};
-
 
 export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBack: () => void; }) {
   const graphLabelToKeyRef = useRef<Map<string, string>>(new Map());
@@ -149,8 +25,7 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
     const [title, setTitle] = useState(mindmap.title);
     const [lastHistoryMaxCreatedAt, setLastHistoryMaxCreatedAt] = useState<string | null>(null);
     const [graphAllNodes, setGraphAllNodes] = useState<MindmapGraphNode[] | null>(null);
-    const [suggestionNodes, setSuggestionNodes] = useState<MindmapGraphNode[] | null>(null);
-    const [suggestionEdges, setSuggestionEdges] = useState<MindmapGraphEdge[] | null>(null);
+    const [aggregatedSuggestionNodes, setAggregatedSuggestionNodes] = useState<MindmapGraphNode[] | null>(null);
     const [showSuggestions] = useState(true);
     useEffect(() => { setTitle(mindmap.title); }, [mindmap.title]);
     const navigate = useNavigate();
@@ -429,8 +304,7 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
             )
         );
 
-        // Suggestion node template (AI 추천)
-        myDiagram.nodeTemplateMap.add("Suggestion",
+        myDiagram.nodeTemplateMap.add("AGGREGATED_SUGGESTIONS",
             new go.Node("Auto", {
                 selectionObjectName: "TEXT",
                 isLayoutPositioned: false,
@@ -440,22 +314,31 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
             .bindTwoWay('location', 'loc', go.Point.parse, go.Point.stringify)
             .add(
                 new go.Shape("RoundedRectangle", {
-                    fill: "#F8FAFC",
-                    stroke: "#94A3B8",
-                    strokeWidth: 1.5,
-                    strokeDashArray: [6, 4],
+                    fill: "#FFFFFF",
+                    stroke: "#60A5FA",
+                    strokeWidth: 2,
+                    strokeDashArray: [4, 3],
                     portId: "",
                     fromSpot: go.Spot.AllSides,
                     toSpot: go.Spot.AllSides,
                 }),
-                new go.TextBlock({
-                    name: "TEXT",
-                    font: "italic 14px Inter, sans-serif",
-                    stroke: "#0F172A",
-                    margin: 8,
-                    maxLines: 2,
-                    overflow: go.TextOverflow.Ellipsis,
-                }).bindTwoWay("text")
+                // Icon + label row
+                new go.Panel("Horizontal", { margin: new go.Margin(8, 10, 8, 10) })
+                  .add(
+                    // Lightbulb icon
+                    new go.TextBlock("💡", {
+                      margin: new go.Margin(0, 6, 0, 0),
+                      font: "16px sans-serif",
+                    }),
+                    // Label text
+                    new go.TextBlock({
+                      name: "TEXT",
+                      font: "600 13px Inter, sans-serif",
+                      stroke: "#0C4A6E",
+                      maxLines: 2,
+                      overflow: go.TextOverflow.Ellipsis,
+                    }).bindTwoWay("text")
+                  )
             )
         );
 
@@ -489,10 +372,20 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
         myDiagram.linkTemplate = new go.Link({ curve: go.Curve.Bezier, fromShortLength: -2, toShortLength: -2, selectable: false })
             .add(new go.Shape({ strokeWidth: 3 }).bind('stroke', 'brush', (brush, link) => (link as go.Link).toNode?.data.brush || brush));
 
-        // Lighter/dashed link for suggestions
+        // Lighter, straight, and short link for suggestions
         myDiagram.linkTemplateMap.add("SuggestionLink",
-            new go.Link({ curve: go.Curve.Bezier, fromShortLength: -2, toShortLength: -2, selectable: false })
-                .add(new go.Shape({ stroke: "#94A3B8", strokeWidth: 2, strokeDashArray: [6, 4] }))
+            new go.Link({
+                curve: go.Curve.None,
+                fromShortLength: 0,
+                toShortLength: 0,
+                fromEndSegmentLength: 0,
+                toEndSegmentLength: 0,
+                fromSpot: go.Spot.Bottom,
+                toSpot: go.Spot.Top,
+                selectable: false,
+            }).add(
+                new go.Shape({ stroke: "#94A3B8", strokeWidth: 2, strokeDashArray: [6, 4] })
+            )
         );
 
         myDiagram.addDiagramListener('SelectionMoved', () => {
@@ -511,6 +404,8 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
 
         const nodeDataArray = transformDataForMindMapSample(mindmap.data);
         myDiagram.model = new go.TreeModel(nodeDataArray);
+        // Enable link categories on TreeModel using a property on child node data
+        (myDiagram.model as go.TreeModel).linkCategoryProperty = 'linkCategory';
         layoutAll();
 
         // 초기에는 루트 2레벨 이하 접기
@@ -520,9 +415,9 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
             }
         });
 
-        // 화면에 맞춤 및 약간 여백
+        // 화면에 맞춤 및 더 확대해서 시작
         myDiagram.zoomToFit();
-        myDiagram.scale = myDiagram.scale * 1.05;
+        myDiagram.scale = myDiagram.scale * 1.5;
 
         // 선택 서브트리 외 영역 흐리게
         myDiagram.addDiagramListener('ChangedSelection', () => {
@@ -569,14 +464,11 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
       try {
         const detail = await getMindmapDetail(mindmap.id);
         const nodes = detail.mindmapGraph?.nodes || [];
-        const edges = detail.mindmapGraph?.edges || [];
-        const sugNodes = nodes.filter((n: any) => n.node_type === 'suggestion' || n.suggestionNode);
-        const sugEdges = edges.filter((e: any) => e.suggestionEdge);
+        const aggNodes = nodes.filter((n: any) => n.node_type === 'AGGREGATED_SUGGESTIONS');
 
         if (mounted) {
           setGraphAllNodes(nodes);
-          setSuggestionNodes(sugNodes);
-          setSuggestionEdges(sugEdges);
+          setAggregatedSuggestionNodes(aggNodes);
 
           // ★ 여기 추가: 그래프 매핑 구성
           graphLabelToKeyRef.current = new Map();
@@ -595,8 +487,6 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
       } catch {
         if (mounted) {
           setGraphAllNodes([]);
-          setSuggestionNodes([]);
-          setSuggestionEdges([]);
           // 실패 시 매핑도 초기화
           graphLabelToKeyRef.current = new Map();
           graphKeyToFilesRef.current = new Map();
@@ -612,89 +502,18 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
     // Render suggestion nodes into GoJS diagram
     useEffect(() => {
         const d = diagramInstance.current;
-        if (!d || !suggestionNodes || !suggestionEdges || !graphAllNodes) return;
+        if (!d || !graphAllNodes) return;
         if (!showSuggestions) {
-            // Remove existing suggestion nodes when toggled off
             d.startTransaction('Remove Suggestions');
             const model = d.model as go.TreeModel;
             const toRemove: any[] = [];
-            (model.nodeDataArray as any[]).forEach(nd => { if (nd.category === 'Suggestion') toRemove.push(nd); });
+            (model.nodeDataArray as any[]).forEach(nd => { if (nd.category === 'AggregatedSuggestion' || nd.category === 'AGGREGATED_SUGGESTIONS') toRemove.push(nd); });
             toRemove.forEach(nd => model.removeNodeData(nd));
             d.commitTransaction('Remove Suggestions');
             return;
         }
-        const model = d.model as go.TreeModel;
-        // Build label -> key map from existing diagram nodes
-        const labelToKey = new Map<string, number | string>();
-        (model.nodeDataArray as any[]).forEach(nd => {
-            if (nd.text != null) labelToKey.set(String(nd.text), nd.key);
-        });
-        // Build a map from graph key -> label (from full graph)
-        const graphKeyToLabel = new Map<string, string>();
-        graphAllNodes.forEach(n => graphKeyToLabel.set(n.key, n.label));
-
-        // Remove existing suggestion nodes to avoid duplicates
-        d.startTransaction('Refresh Suggestions');
-        const toRemove: any[] = [];
-        (model.nodeDataArray as any[]).forEach(nd => { if (nd.category === 'Suggestion') toRemove.push(nd); });
-        toRemove.forEach(nd => model.removeNodeData(nd));
-
-        // Compute next unique numeric key
-        let maxKey = 0;
-        (model.nodeDataArray as any[]).forEach(nd => { const k = Number(nd.key); if (!Number.isNaN(k)) maxKey = Math.max(maxKey, k); });
-        let nextKey = maxKey + 1;
-
-        suggestionNodes.forEach(sn => {
-            const parentEdge = suggestionEdges.find(e => e.to === sn.key || e.from === sn.key);
-            let parentKey: any = null;
-            if (parentEdge) {
-                const otherKey = parentEdge.to === sn.key ? parentEdge.from : parentEdge.to;
-                const parentLabel = graphKeyToLabel.get(otherKey);
-                if (parentLabel && labelToKey.has(parentLabel)) {
-                    parentKey = labelToKey.get(parentLabel)!;
-                }
-            }
-            if (parentKey == null) {
-                // fallback to root
-                parentKey = 0;
-            }
-            // Find parent's dir to align
-            const parentNode = d.findNodeForKey(parentKey) as go.Node | null;
-            const pdir = parentNode?.data?.dir || 'right';
-            const newData: go.ObjectData = { key: nextKey++, text: sn.label, category: 'Suggestion', dir: pdir, parent: parentKey, linkCategory: 'SuggestionLink' };
-            model.addNodeData(newData);
-        });
-        d.commitTransaction('Refresh Suggestions');
-        // Relayout after adding
-        const root = d.findNodeForKey(0);
-        if (root) {
-            (d as any).layoutDiagram ? (d as any).layoutDiagram() : d.zoomToFit();
-        }
-        // Position suggestion nodes near their parent with staggered offsets
-        d.startTransaction('Position Suggestions');
-        const groups = new Map<any, any[]>();
-        (model.nodeDataArray as any[]).forEach(nd => {
-            if (nd.category === 'Suggestion' && nd.parent != null) {
-                const arr = groups.get(nd.parent) || [];
-                arr.push(nd);
-                groups.set(nd.parent, arr);
-            }
-        });
-        groups.forEach((arr, pkey) => {
-            const parentNode = d.findNodeForKey(pkey) as go.Node | null;
-            if (!parentNode) return;
-            const base = parentNode.location.copy();
-            const dir = parentNode.data?.dir || 'right';
-            const dx = dir === 'left' ? -180 : 180; // horizontal offset
-            const gap = 46; // vertical gap between suggestions
-            const startY = base.y - ((arr.length - 1) * gap) / 2;
-            arr.forEach((nd, i) => {
-                const loc = new go.Point(base.x + dx, startY + i * gap);
-                model.setDataProperty(nd, 'loc', go.Point.stringify(loc));
-            });
-        });
-        d.commitTransaction('Position Suggestions');
-    }, [suggestionNodes, suggestionEdges, graphAllNodes, showSuggestions]);
+        renderAggregatedSuggestions(d, aggregatedSuggestionNodes || []);
+    }, [aggregatedSuggestionNodes, graphAllNodes, showSuggestions]);
 
     const handleInvite = () => setInviteModalOpen(true);
     const handleLeave = () => {
