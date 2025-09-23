@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { inviteMindmap, getMindmapInvitations, createMindmapInvitationLink, type MindmapInvitationRole, type MindmapInvitationItem, type PageResponse } from "../../api/mindmap";
+import { inviteMindmap, getMindmapInvitations, createMindmapInvitationLink, type MindmapInvitationRole, type MindmapInvitationItem } from "../../api/mindmap";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -8,13 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Badge } from "../ui/badge";
 import { Share2, Eye, Pencil } from "lucide-react";
 
-interface TeamMember {
-  id: string;
-  name: string;
-  email: string;
-  role: 'owner' | 'can edit' | 'can view';
-  isMe?: boolean;
-}
 
 interface InviteModalProps {
   open: boolean;
