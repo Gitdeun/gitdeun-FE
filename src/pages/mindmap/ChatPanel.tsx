@@ -10,7 +10,6 @@ export const ChatPanel: React.FC<{ mapId: number; showHistory?: boolean }> = ({ 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isSending, setIsSending] = useState(false);
 
-  // How many analysis requests are awaiting server-side completion (to show a typing-like loader)
   const [pendingAnalysisCount, setPendingAnalysisCount] = useState(0);
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -20,7 +19,6 @@ export const ChatPanel: React.FC<{ mapId: number; showHistory?: boolean }> = ({ 
   }, [messages]);
 
   useEffect(() => {
-    // reset chat state on map change
     setMessages([]);
     setPendingAnalysisCount(0);
   }, [mapId]);
