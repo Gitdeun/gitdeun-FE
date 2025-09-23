@@ -202,3 +202,24 @@ export async function getMindmapPromptHistories(
   const res = await httpClient.get(`/mindmaps/${mapId}/prompts/histories`, { params: { page, size } });
   return res.data as PageResponse<PromptHistoryItem>;
 }
+
+// ======== Node Code (GET) ========
+// /mindmaps/{mapId}/nodes/{nodeKey}/code
+
+export type MindmapNodeCodeFile = {
+  fileName: string;
+  filePath: string;
+  codeContents: string;
+};
+
+export type MindmapNodeCodeResponse = {
+  nodeKey: string;
+  nodeLabel: string;
+  files: MindmapNodeCodeFile[];
+};
+
+export async function getMindmapNodeCode(mapId: number, nodeKey: string): Promise<MindmapNodeCodeResponse> {
+  const res = await httpClient.get(`/mindmaps/${mapId}/nodes/${encodeURIComponent(nodeKey)}/code`);
+  return res.data as MindmapNodeCodeResponse;
+}
+

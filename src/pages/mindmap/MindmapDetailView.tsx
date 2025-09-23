@@ -51,11 +51,11 @@ function HistoryList({ mapId }: { mapId: number; onUsePrompt: (p: string) => voi
   }, [mapId, page, size]);
 
   return (
-    <div className="h-full w-full flex flex-col">
+    <div className="flex flex-col w-full h-full">
       <div className="px-4 py-3.5 border-b border-neutral-200 bg-white/90 sticky top-0 z-10 flex items-center justify-between">
         <div className="text-sm font-semibold text-sky-700">최근 프롬프트</div>
       </div>
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="flex-1 p-3 overflow-y-auto">
         {loading ? (
           <div className="p-3 text-sm text-neutral-500">불러오는 중…</div>
         ) : error ? (
@@ -66,7 +66,7 @@ function HistoryList({ mapId }: { mapId: number; onUsePrompt: (p: string) => voi
           <ul className="space-y-2">
             {items.map(h => (
               <li key={h.historyId}>
-                <div className="group w-full text-left p-3 rounded-lg border border-neutral-200 bg-white hover:bg-sky-50/60 transition">
+                <div className="w-full p-3 text-left transition bg-white border rounded-lg group border-neutral-200 hover:bg-sky-50/60">
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-[11px] text-neutral-500 flex items-center gap-2">
                       <span className={`inline-block h-1.5 w-1.5 rounded-full ${h.applied ? 'bg-emerald-500' : 'bg-neutral-300'}`}></span>
@@ -82,13 +82,13 @@ function HistoryList({ mapId }: { mapId: number; onUsePrompt: (p: string) => voi
           </ul>
         )}
       </div>
-      <div className="p-2 flex items-center justify-center gap-3">
+      <div className="flex items-center justify-center gap-3 p-2">
         <button
           className="px-3 py-1.5 text-xs rounded-full border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 disabled:opacity-50 disabled:hover:bg-sky-50"
           disabled={page === 0}
           onClick={() => setPage(p => Math.max(0, p - 1))}
         >이전</button>
-        <span className="text-xs px-2 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+        <span className="px-2 py-1 text-xs border rounded-full bg-sky-50 text-sky-700 border-sky-200">
           {page + 1} / {Math.max(1, totalPages)}
         </span>
         <button
@@ -137,7 +137,9 @@ const transformDataForMindMapSample = (data: MindMapDataNode) => {
 
 
 export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBack: () => void; }) {
-    const diagramRef = useRef<HTMLDivElement>(null);
+  const graphLabelToKeyRef = useRef<Map<string, string>>(new Map());
+  const graphKeyToFilesRef = useRef<Map<string, Array<{ fileName: string; file_path: string }>>>(new Map());
+  const diagramRef = useRef<HTMLDivElement>(null);
     const diagramInstance = useRef<go.Diagram | null>(null);
     const overviewRef = useRef<HTMLDivElement>(null);
     const overviewInstance = useRef<go.Overview | null>(null);
@@ -152,8 +154,14 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
     const [showSuggestions] = useState(true);
     useEffect(() => { setTitle(mindmap.title); }, [mindmap.title]);
     const navigate = useNavigate();
-  const [hoverCard, setHoverCard] = useState<{ visible: boolean; left: number; top: number; text: string }>(() => ({ visible: false, left: 0, top: 0, text: '' }));
-  const hoverHideTimer = useRef<number | null>(null);
+    const [hoverCard, setHoverCard] = useState<{
+      visible: boolean;
+      left: number;
+      top: number;
+      text: string;
+      nodeKey: string | null;        // ← 추가
+    }>(() => ({ visible: false, left: 0, top: 0, text: '', nodeKey: null }));
+    const hoverHideTimer = useRef<number | null>(null);
     const [connectedUsers, setConnectedUsers] = useState<ConnectedUser[]>([]);
 
   const cancelHoverHide = () => {
@@ -174,9 +182,20 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
     const d = diagramInstance.current;
     const ptDoc = node.getDocumentPoint(go.Spot.Top);
     const ptView = d.transformDocToView(ptDoc);
+
+    const label = (node.data as any)?.text || '';
+    const nodeKey = graphLabelToKeyRef.current.get(label) ?? null;
+
     cancelHoverHide();
-    setHoverCard({ visible: true, left: ptView.x + 8, top: Math.max(8, ptView.y - 8), text: (node.data as any)?.text || '' });
+    setHoverCard({
+      visible: true,
+      left: ptView.x + 8,
+      top: Math.max(8, ptView.y - 8),
+      text: label,
+      nodeKey, // ← 여기 저장
+    });
   };
+
 
     // Poll connected users every 10s
     useEffect(() => {
@@ -541,27 +560,54 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
     }, [mindmap]);
 
     // Fetch suggestion graph (AI 추천 노드/엣지)
-    useEffect(() => {
-        let mounted = true;
-        const run = async () => {
-            try {
-                const detail = await getMindmapDetail(mindmap.id);
-                const nodes = detail.mindmapGraph?.nodes || [];
-                const edges = detail.mindmapGraph?.edges || [];
-                const sugNodes = nodes.filter(n => n.node_type === 'suggestion' || n.suggestionNode);
-                const sugEdges = edges.filter(e => e.suggestionEdge);
-                if (mounted) {
-                    setGraphAllNodes(nodes);
-                    setSuggestionNodes(sugNodes);
-                    setSuggestionEdges(sugEdges);
-                }
-            } catch {
-                if (mounted) { setGraphAllNodes([]); setSuggestionNodes([]); setSuggestionEdges([]); }
+    // 컴포넌트 상단에 ref 먼저 선언
+
+  // ↓ 기존 useEffect 수정본
+  useEffect(() => {
+    let mounted = true;
+    const run = async () => {
+      try {
+        const detail = await getMindmapDetail(mindmap.id);
+        const nodes = detail.mindmapGraph?.nodes || [];
+        const edges = detail.mindmapGraph?.edges || [];
+        const sugNodes = nodes.filter((n: any) => n.node_type === 'suggestion' || n.suggestionNode);
+        const sugEdges = edges.filter((e: any) => e.suggestionEdge);
+
+        if (mounted) {
+          setGraphAllNodes(nodes);
+          setSuggestionNodes(sugNodes);
+          setSuggestionEdges(sugEdges);
+
+          // ★ 여기 추가: 그래프 매핑 구성
+          graphLabelToKeyRef.current = new Map();
+          graphKeyToFilesRef.current = new Map();
+
+          nodes.forEach((n: any) => {
+            if (n?.label && n?.key) {
+              graphLabelToKeyRef.current.set(String(n.label), String(n.key)); // 라벨 → 그래프 key
             }
-        };
-        void run();
-        return () => { mounted = false; };
-    }, [mindmap.id]);
+            graphKeyToFilesRef.current.set(
+              String(n.key),
+              Array.isArray(n?.related_files) ? n.related_files : []
+            );
+          });
+        }
+      } catch {
+        if (mounted) {
+          setGraphAllNodes([]);
+          setSuggestionNodes([]);
+          setSuggestionEdges([]);
+          // 실패 시 매핑도 초기화
+          graphLabelToKeyRef.current = new Map();
+          graphKeyToFilesRef.current = new Map();
+        }
+      }
+    };
+    void run();
+    return () => {
+      mounted = false;
+    };
+  }, [mindmap.id]);
 
     // Render suggestion nodes into GoJS diagram
     useEffect(() => {
@@ -668,7 +714,7 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
     };
 
     return (
-        <div className="h-screen flex flex-col bg-gradient-to-b from-slate-50 to-slate-100">
+        <div className="flex flex-col h-screen bg-gradient-to-b from-slate-50 to-slate-100">
             <Header
                 projectName={title}
                 onBack={onBack}
@@ -688,26 +734,26 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                     }
                 }}
             />
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex flex-1 overflow-hidden">
                 <div className="relative flex flex-col flex-1">
                     {/* Diagram surface container */}
                     <div className="flex-1 p-2 md:p-2.5 lg:p-3.5">
-                        <div className="h-full w-full bg-white rounded-xl border border-neutral-200 shadow relative">
+                        <div className="relative w-full h-full bg-white border shadow rounded-xl border-neutral-200">
                             {/* Zoom controls */}
-                            <div className="absolute top-3 right-3 z-10 flex gap-2">
+                            <div className="absolute z-10 flex gap-2 top-3 right-3">
                                 <button onClick={() => diagramInstance.current?.commandHandler.increaseZoom()} className="px-2.5 py-1.5 text-xs rounded-md bg-white/90 border shadow">+</button>
                                 <button onClick={() => diagramInstance.current?.commandHandler.decreaseZoom()} className="px-2.5 py-1.5 text-xs rounded-md bg-white/90 border shadow">-</button>
                                 <button onClick={() => diagramInstance.current?.zoomToFit()} className="px-2.5 py-1.5 text-xs rounded-md bg-white/90 border shadow">맞춤</button>
                                 <button onClick={() => { const d = diagramInstance.current; if (d) d.centerRect(d.documentBounds); }} className="px-2.5 py-1.5 text-xs rounded-md bg-white/90 border shadow">센터</button>
                             </div>
                             {/* Diagram canvas */}
-                            <div ref={diagramRef} className="h-full w-full rounded-xl" />
+                            <div ref={diagramRef} className="w-full h-full rounded-xl" />
                             {/* Overview minimap */}
-                            <div ref={overviewRef} className="absolute bottom-3 right-3 w-48 h-32 bg-white/80 border border-neutral-200 rounded-lg shadow" />
+                            <div ref={overviewRef} className="absolute w-48 h-32 border rounded-lg shadow bottom-3 right-3 bg-white/80 border-neutral-200" />
                             {/* Hover overlay */}
                             {hoverCard.visible && (
                               <div
-                                className="absolute z-20 rounded-xl border border-slate-200 bg-white/95 shadow-lg px-3 py-2 text-xs text-slate-800"
+                                className="absolute z-20 px-3 py-2 text-xs border shadow-lg rounded-xl border-slate-200 bg-white/95 text-slate-800"
                                 style={{ left: hoverCard.left, top: hoverCard.top }}
                                 onMouseEnter={cancelHoverHide}
                                 onMouseLeave={hideHoverDelayed}
@@ -716,7 +762,13 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                                 <div className="flex justify-end">
                                   <button
                                     className="px-2.5 py-1 rounded-md border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
-                                    onClick={() => navigate('/code')}
+                                    onClick={() => {
+                                      if (!hoverCard.nodeKey) {
+                                        toast.error('이 노드에 연결된 코드 정보를 찾을 수 없어요.');
+                                        return;
+                                      }
+                                      navigate(`/code?mapId=${mindmap.id}&nodeKey=${hoverCard.nodeKey}`);
+                                    }}
                                   >이동</button>
                                 </div>
                               </div>
@@ -725,24 +777,24 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                     </div>
                 </div>
                 <div className="relative border-l border-neutral-200 w-12 min-w-[48px] sm:w-14 sm:min-w-[56px] bg-white">
-                  <div className="h-full flex flex-col items-center py-3 gap-2">
-                    <div className="h-8 w-8 rounded-lg bg-sky-600 text-white grid place-items-center text-sm font-bold select-none">AI</div>
-                    <div className="my-1 w-6 h-px bg-neutral-200" />
-                    <button className="w-9 h-9 rounded-lg hover:bg-neutral-100 grid place-items-center" title="새 채팅" onClick={() => { setChatOpen(true); setHistoryOpen(false); }}>
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path d="M12 5v14M5 12h14" strokeLinecap="round"/></svg>
+                  <div className="flex flex-col items-center h-full gap-2 py-3">
+                    <div className="grid w-8 h-8 text-sm font-bold text-white rounded-lg select-none bg-sky-600 place-items-center">AI</div>
+                    <div className="w-6 h-px my-1 bg-neutral-200" />
+                    <button className="grid rounded-lg w-9 h-9 hover:bg-neutral-100 place-items-center" title="새 채팅" onClick={() => { setChatOpen(true); setHistoryOpen(false); }}>
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5"><path d="M12 5v14M5 12h14" strokeLinecap="round"/></svg>
                     </button>
-                    <button className="w-9 h-9 rounded-lg hover:bg-neutral-100 grid place-items-center" title="히스토리" onClick={() => { setHistoryOpen(true); setChatOpen(false); }}>
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path d="M4 19V7a2 2 0 0 1 2-2h10"/><rect x="8" y="5" width="12" height="14" rx="2"/></svg>
+                    <button className="grid rounded-lg w-9 h-9 hover:bg-neutral-100 place-items-center" title="히스토리" onClick={() => { setHistoryOpen(true); setChatOpen(false); }}>
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5"><path d="M4 19V7a2 2 0 0 1 2-2h10"/><rect x="8" y="5" width="12" height="14" rx="2"/></svg>
                     </button>
-                    <div className="mt-2 w-6 h-px bg-neutral-200" />
-                    <div className="flex-1 overflow-y-auto w-full flex flex-col items-center gap-1 pt-1">
+                    <div className="w-6 h-px mt-2 bg-neutral-200" />
+                    <div className="flex flex-col items-center flex-1 w-full gap-1 pt-1 overflow-y-auto">
                     </div>
                     <button
-                      className="mb-2 w-9 h-9 rounded-lg grid place-items-center bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100"
+                      className="grid mb-2 border rounded-lg w-9 h-9 place-items-center bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100"
                       title="AI 패널 열기"
                       onClick={() => { setChatOpen(true); setHistoryOpen(false); }}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5"><path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     </button>
                   </div>
                   {/* Slide-out Chat overlay */}
@@ -759,11 +811,11 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                     >
                       <div className="absolute left-[-14px] top-4">
                         <button
-                          className="h-7 w-7 rounded-full border border-neutral-300 bg-white shadow hover:bg-neutral-50 flex items-center justify-center"
+                          className="flex items-center justify-center bg-white border rounded-full shadow h-7 w-7 border-neutral-300 hover:bg-neutral-50"
                           title="닫기"
                           onClick={() => setChatOpen(false)}
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round"/></svg>
                         </button>
                       </div>
                       <div className="h-full">
@@ -785,11 +837,11 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                     >
                       <div className="absolute left-[-14px] top-4">
                         <button
-                          className="h-7 w-7 rounded-full border border-neutral-300 bg-white shadow hover:bg-neutral-50 flex items-center justify-center"
+                          className="flex items-center justify-center bg-white border rounded-full shadow h-7 w-7 border-neutral-300 hover:bg-neutral-50"
                           title="닫기"
                           onClick={() => setHistoryOpen(false)}
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round"/></svg>
                         </button>
                       </div>
                       <HistoryList mapId={mindmap.id} onUsePrompt={() => { setChatOpen(true); setHistoryOpen(false); }} />
