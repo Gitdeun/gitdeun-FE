@@ -1,4 +1,3 @@
-
 import { Routes, Route, Navigate } from "react-router-dom";
 import Home from "./pages/home/Home";
 import Login from "./pages/login/Login";
@@ -19,12 +18,10 @@ function App() {
       <Toaster position="top-right" richColors closeButton />
       <Routes>
         <Route path="/oauth/callback" element={<OAuthCallback />} />
-
         <Route path="/" element={<Navigate to="/login" />} />
         <Route element={<Layout />}>
           <Route path="login" element={<Login />} />
           <Route path="home" element={<Home />} />
-          <Route path="code" element={<Code />} />
           <Route path="mindmap" element={<Mindmap />} />
           <Route path="posts" element={<PostList />} />
           <Route path="post/new" element={<NewPost />} />
@@ -32,6 +29,7 @@ function App() {
           <Route path="mypage" element={<MyPage />} />
         </Route>
         <Route path="mindmap/:id" element={<Mindmap />} />
+        <Route path="code" element={<Code />} />
         <Route path="invitations/link/:token" element={<AcceptInvitation />} />
       </Routes>
     </>

@@ -30,6 +30,7 @@ export interface CodeComment {
   user: string;
   content: string;
   type: EmojiType;
+  replies?: CodeComment[];
 }
 
 export interface CodeLine {
@@ -66,14 +67,14 @@ export interface FileItem {
   isExpanded?: boolean;
 }
 
-export interface FileListProps {
+export type FileListProps = {
   files: FileItem[];
-  selectedFile: string | null; // 선택된 파일 id
-  onFileSelect: (item: FileItem) => void;
+  selectedFile: string | null;
+  onFileSelect: (file: FileItem) => void;
   onToggleFolder: (id: string) => void;
-  /** ✅ 파일/폴더 옆에 표시할 이모지 합계 */
   emojiCountsByFileId?: Record<string, EmojiCounts>;
-}
+  mindmapUrl?: string;
+};
 
 export interface FileListItemProps {
   item: FileItem;
