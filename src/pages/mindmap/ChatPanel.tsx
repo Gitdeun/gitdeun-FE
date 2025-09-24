@@ -58,7 +58,7 @@ export const ChatPanel: React.FC<{ mapId: number; showHistory?: boolean }> = ({ 
     setInput('');
     try {
       await sendMindmapPrompt(mapId, content);
-      toast.success('요청이 전송되었습니다.');
+      toast.success('요청이 전송되었습니다. 최대 5분 정도 소요되며 변경 후 알림이 전송됩니다.');
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || '요청 전송 중 오류가 발생했습니다.';
       toast.error(msg);

@@ -92,7 +92,6 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
         };
     }, [mindmap.id]);
 
-    // Poll latest prompt histories to detect completion and notify ChatPanel
     useEffect(() => {
         let timer: number | null = null;
 
@@ -116,9 +115,7 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
             }
         };
 
-        // initial check
         void checkLatestHistory();
-        // poll every 6s
         timer = window.setInterval(() => { void checkLatestHistory(); }, 6000);
 
         return () => {
@@ -126,7 +123,6 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
         };
     }, [mindmap.id, lastHistoryMaxCreatedAt]);
 
-    // Open presence SSE for this mindmap
     useEffect(() => {
         const baseUrl = (httpClient.defaults.baseURL as string) || '';
         if (!baseUrl) return;
