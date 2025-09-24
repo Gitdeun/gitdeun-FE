@@ -641,6 +641,13 @@ export default function CodePage() {
     [currentRef?.refId, setRefThreadsByRefId]
   );
 
+  const handleSaveEditedContent = useCallback((fileId: string, newText: string) => {
+    setFileContentsById(prev => ({
+      ...prev,
+      [fileId]: toLineArray(newText),
+    }));
+  }, []);
+
   return (
     <div className="flex flex-col h-screen bg-blue-50/20">
       <div className="flex flex-1 overflow-hidden">
@@ -671,6 +678,7 @@ export default function CodePage() {
               onDeleteReference={handleDeleteReference}
               onResolveReview={(rid) => void handleResolveReview(rid)}
               onReplyRefReview={(reviewId, text) => void handleAddRefReply(reviewId, text)}
+              onSaveEditedContent={handleSaveEditedContent}
               onChangeRefEmoji={(reviewId, commentId, type) =>
                 handleChangeRefEmoji(reviewId, commentId, type)
               }

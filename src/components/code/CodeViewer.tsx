@@ -1,18 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MessageSquare, X, Trash2 } from "lucide-react";
+import { MessageSquare, X, Trash2, PencilLine, Check } from "lucide-react";
 import { CommentSidebar, type SidebarThread } from "./CommentSidebar";
 import {
   cn,
   EmojiType,
   EmojiTypeDetails,
-  type CodeViewerProps,
   type CodeLine,
+  type CodeViewerProps,
   type CodeComment,
 } from "../../types.ts";
 
-/** Drawer에 표시할 참조 마커 */
 type RefMarker = {
   referenceId: number;
   filePath: string;
@@ -28,7 +27,6 @@ type CodeViewerWithSelectionProps = CodeViewerProps & {
   currentReferenceId?: number | null;
   onAddRefReview?: (content: string, type: EmojiType, files?: File[]) => Promise<void> | void;
   onSidebarClose?: () => void;
-  onChangeRefEmoji?: (reviewId: string, commentId: string, type: EmojiType) => void | Promise<void>;
 
   referenceMarkers?: RefMarker[];
   onSelectReference?: (m: RefMarker) => void;
@@ -39,6 +37,10 @@ type CodeViewerWithSelectionProps = CodeViewerProps & {
 
   onResolveReview?: (reviewId: string) => Promise<void> | void;
   onReplyRefReview?: (reviewId: string, content: string) => Promise<void> | void;
+
+  onSaveEditedContent?: (fileId: string, newText: string) => Promise<void> | void;
+
+  onChangeRefEmoji?: (reviewId: string, commentId: string, type: EmojiType) => void | Promise<void>;
 };
 
 const escapeHtml = (s: string) =>
@@ -71,6 +73,7 @@ const byTypeCounts = (threadsByLine: Record<number, SidebarThread[]>) => {
   );
   return out as EmojiCounts;
 };
+
 const headerEmojiCounts = (threadsByLine: Record<number, SidebarThread[]>) => {
   const out: Record<string, number> = {};
   Object.values(threadsByLine).forEach((list) =>
@@ -81,6 +84,8 @@ const headerEmojiCounts = (threadsByLine: Record<number, SidebarThread[]>) => {
   );
   return out;
 };
+
+const linesToText = (lines?: CodeLine[]) => (lines ?? []).map(l => l.content).join("\n");
 
 export function CodeViewer(props: CodeViewerWithSelectionProps) {
   const {
@@ -97,10 +102,15 @@ export function CodeViewer(props: CodeViewerWithSelectionProps) {
     onDeleteReference,
     onResolveReview,
     onReplyRefReview,
+    onSaveEditedContent,
+    onChangeRefEmoji,
   } = props;
 
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
   const [lines, setLines] = useState<CodeLine[]>(file?.content ?? []);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftText, setDraftText] = useState("");
 
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<number | null>(null);
@@ -117,6 +127,7 @@ export function CodeViewer(props: CodeViewerWithSelectionProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const startDrag = (lineNo: number) => {
+    if (isEditing) return; 
     setIsDragging(true);
     setDragStart(lineNo);
     setDragEnd(lineNo);
@@ -191,6 +202,19 @@ export function CodeViewer(props: CodeViewerWithSelectionProps) {
       : (localThreads ?? [])) as SidebarThread[];
 
   const fileHeaderEmoji = useMemo(() => headerEmojiCounts(sidebarThreads), [sidebarThreads]);
+
+  const beginEdit = () => {
+    setDraftText(linesToText(lines));
+    setIsEditing(true);
+    setSelectedLine(null);
+    setPersistentSelection(null);
+  };
+
+  const finishEdit = async () => {
+    if (!file?.id) return;
+    await onSaveEditedContent?.(file.id, draftText);
+    setIsEditing(false);
+  };
 
   if (!file) {
     return (
@@ -276,47 +300,77 @@ export function CodeViewer(props: CodeViewerWithSelectionProps) {
               <MessageSquare className="w-4 h-4 mr-2" />
               {`참조목록${(referenceMarkers?.length ?? 0) > 0 ? ` ${referenceMarkers!.length}개` : ""}`}
             </button>
+
+            {!isEditing ? (
+              <button
+                onClick={beginEdit}
+                className="inline-flex items-center px-3 py-1.5 rounded-lg border border-blue-300 bg-white text-blue-700 hover:bg-blue-50 transition"
+                title="코드 수정 모드로 전환"
+              >
+                <PencilLine className="w-4 h-4 mr-2" />
+                수정하기
+              </button>
+            ) : (
+              <button
+                onClick={finishEdit}
+                className="inline-flex items-center px-3 py-1.5 rounded-lg border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 transition"
+                title="수정 완료"
+              >
+                <Check className="w-4 h-4 mr-2" />
+                완료하기
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <div className="flex-1 min-w-0 min-h-0 overflow-y-auto select-none">
-          <div className="font-mono text-sm">
-            {lines?.map((line) => {
-              const yellow = isInDrag(line.number) || isInPersistent(line.number);
-              return (
-                <div
-                  key={line.number}
-                  className={cn(
-                    "flex group relative code-line",
-                    yellow ? "bg-yellow-50" : selectedLine === line.number ? "bg-blue-50" : "hover:bg-gray-50",
-                  )}
-                  onMouseDown={() => startDrag(line.number)}
-                  onMouseEnter={() => updateDrag(line.number)}
-                  onClick={() => {
-                    if (!isDragging) setSelectedLine(line.number);
-                  }}
-                >
-                  <div className="w-16 py-1 pr-4 text-right text-gray-400 border-r border-gray-200 select-none bg-gray-50/30">
-                    {line.number}
-                  </div>
+          {!isEditing ? (
+            <div className="font-mono text-sm">
+              {lines?.map((line) => {
+                const yellow = isInDrag(line.number) || isInPersistent(line.number);
+                return (
                   <div
-                    className="flex-1 px-4 py-1"
-                    dangerouslySetInnerHTML={{ __html: syntaxHighlight(line.content) }}
-                  />
+                    key={line.number}
+                    className={cn(
+                      "flex group relative code-line",
+                      yellow ? "bg-yellow-50" : selectedLine === line.number ? "bg-blue-50" : "hover:bg-gray-50",
+                    )}
+                    onMouseDown={() => startDrag(line.number)}
+                    onMouseEnter={() => updateDrag(line.number)}
+                    onClick={() => {
+                      if (!isDragging) setSelectedLine(line.number);
+                    }}
+                  >
+                    <div className="w-16 py-1 pr-4 text-right text-gray-400 border-r border-gray-200 select-none bg-gray-50/30">
+                      {line.number}
+                    </div>
+                    <div
+                      className="flex-1 px-4 py-1"
+                      dangerouslySetInnerHTML={{ __html: syntaxHighlight(line.content) }}
+                    />
+                  </div>
+                );
+              }) || (
+                <div className="p-8 text-center text-gray-500">
+                  <p>파일 내용을 불러올 수 없습니다.</p>
                 </div>
-              );
-            }) || (
-              <div className="p-8 text-center text-gray-500">
-                <p>파일 내용을 불러올 수 없습니다.</p>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          ) : (
+            <div className="h-full">
+              <textarea
+                value={draftText}
+                onChange={(e) => setDraftText(e.target.value)}
+                className="w-full h-full p-4 font-mono text-sm bg-white outline-none resize-none"
+                spellCheck={false}
+              />
+            </div>
+          )}
         </div>
 
-        {/* 사이드바 */}
-        {selectedLine != null && (
+        {!isEditing && selectedLine != null && (
           <CommentSidebar
             lineNumber={selectedLine}
             range={
@@ -333,14 +387,14 @@ export function CodeViewer(props: CodeViewerWithSelectionProps) {
             onAddTop={(type, content) => addSidebarTop(selectedLine, content, type)}
             onAddReply={(parentId, content) => {
               if (currentReferenceId && referenceThreads.length > 0 && onReplyRefReview) {
-                onReplyRefReview(parentId, content); 
+                onReplyRefReview(parentId, content);
               } else {
                 addSidebarReply(selectedLine, parentId, content);
               }
             }}
             onResolveThread={(rid) => onResolveReview?.(rid)}
             onChangeEmoji={(reviewId, commentId, type) =>
-              props.onChangeRefEmoji?.(reviewId, commentId, type)
+              onChangeRefEmoji?.(reviewId, commentId, type)
             }
           />
         )}
@@ -389,10 +443,7 @@ export function CodeViewer(props: CodeViewerWithSelectionProps) {
                               onClick={async (e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                if (!onDeleteReference) return;
-                                const ok = window.confirm("이 참조 블록을 삭제할까요?");
-                                if (!ok) return;
-                                await onDeleteReference(m.referenceId);
+                                await onDeleteReference?.(m.referenceId);
                               }}
                               className="p-2 text-red-500 border border-transparent rounded-lg shrink-0 hover:border-red-200 hover:bg-red-50"
                             >
