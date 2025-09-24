@@ -71,8 +71,12 @@ export default function Header() {
     const sub = openNotificationSSE({
       onMessage: (payload: any) => {
         try {
+          console.debug('[SSE] notification payload:', payload);
           const type = payload?.notificationType;
           const id = payload?.referenceId;
+          if (type === 'ANALYSIS_PROMPT') {
+            try { window.dispatchEvent(new Event('mindmap:analysis_prompt')); } catch {}
+          }
           if (type === 'MINDMAP_CREATE' && typeof id === 'number' && !Number.isNaN(id)) {
             toast.success('마인드맵이 생성되었습니다. 상세 페이지로 이동합니다.');
             navigate(`/mindmap/${id}`);

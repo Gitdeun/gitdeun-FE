@@ -154,20 +154,23 @@ export type MindmapSSEMessage = {
 };
 
 export function connectMindmapSSE({
-  baseUrl,
   mapId,
   onMessage,
   onError,
+  onOpen,
   withCredentials = true,
 }: {
-  baseUrl: string;
   mapId: number;
   onMessage: (msg: MindmapSSEMessage) => void;
   onError?: (ev: Event) => void;
+  onOpen?: (ev: Event) => void;
   withCredentials?: boolean;
 }) {
-  const url = `${baseUrl.replace(/\/$/, '')}/mindmaps/${mapId}/sse`;
+  const base = (httpClient.defaults.baseURL as string) || '';
+  const origin = base ? base.replace(/\/$/, '') : window.location.origin;
+  const url = `${origin}/mindmaps/${mapId}/sse`;
   const es = new EventSource(url, { withCredentials });
+  es.onopen = (ev) => { if (onOpen) onOpen(ev); };
   es.onmessage = (e) => {
     try {
       const data = JSON.parse(e.data);
@@ -176,6 +179,21 @@ export function connectMindmapSSE({
       // ignore
     }
   };
+  // Also listen for custom-named SSE events (server may use 'event: <name>')
+  const forward = (name: string) => (e: MessageEvent) => {
+    let payload: any = undefined;
+    try { payload = JSON.parse(e.data); } catch { payload = e.data; }
+    const type = name;
+    onMessage({ type, payload });
+  };
+  const customEvents = [
+    'connected',
+    'mindmap-update', 'mindmap_updated', 'graph-updated', 'mindmap-updated',
+    'prompt-ready', 'prompt_ready',
+    'prompt-applied', 'prompt_applied',
+    'users-update', 'user-joined', 'user_left', 'user-left', 'user_joined'
+  ];
+  customEvents.forEach(evt => es.addEventListener(evt, forward(evt)));
   es.onerror = (ev) => { if (onError) onError(ev); };
   return es;
 }
