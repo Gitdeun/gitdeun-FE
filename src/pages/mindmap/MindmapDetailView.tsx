@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import go from 'gojs';
 import { toast } from 'sonner';
@@ -9,8 +9,8 @@ import { ChatPanel } from './ChatPanel';
 import { HistoryList } from './components/HistoryList';
 import { transformDataForMindMapSample } from './utils/transform';
 import { renderAggregatedSuggestions } from './diagram/renderSuggestions';
-import { updateMindmapTitle, deleteMindmap, getConnectedUsers, type ConnectedUser, connectMindmapSSE, getMindmapPromptHistories, type PromptHistoryItem, type PageResponse, getMindmapDetail, type MindmapGraphNode } from '../../api/mindmap';
-import httpClient from '../../api/httpClient';
+import { updateMindmapTitle, deleteMindmap, getConnectedUsers, getMindmapDetail, type ConnectedUser, connectMindmapSSE, type MindmapGraphNode } from '../../api/mindmap';
+
 
 export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBack: () => void; }) {
   const graphLabelToKeyRef = useRef<Map<string, string>>(new Map());
@@ -23,7 +23,6 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
     const [chatOpen, setChatOpen] = useState(false);
     const [historyOpen, setHistoryOpen] = useState(false);
     const [title, setTitle] = useState(mindmap.title);
-    const [lastHistoryMaxCreatedAt, setLastHistoryMaxCreatedAt] = useState<string | null>(null);
     const [graphAllNodes, setGraphAllNodes] = useState<MindmapGraphNode[] | null>(null);
     const [aggregatedSuggestionNodes, setAggregatedSuggestionNodes] = useState<MindmapGraphNode[] | null>(null);
     const [showSuggestions] = useState(true);
@@ -92,43 +91,44 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
         };
     }, [mindmap.id]);
 
+    // 공통 그래프 로더 (초기 로드 및 SSE 갱신에서 사용)
+    const loadGraphDetail = useCallback(async () => {
+      try {
+        const detail = await getMindmapDetail(mindmap.id);
+        const nodes = detail.mindmapGraph?.nodes || [];
+        const aggNodes = nodes.filter((n: any) => n.node_type === 'AGGREGATED_SUGGESTIONS');
+
+        setGraphAllNodes(nodes);
+        setAggregatedSuggestionNodes(aggNodes);
+
+        // 그래프 매핑 구성
+        graphLabelToKeyRef.current = new Map();
+        graphKeyToFilesRef.current = new Map();
+        nodes.forEach((n: any) => {
+          if (n?.label && n?.key) {
+            graphLabelToKeyRef.current.set(String(n.label), String(n.key));
+          }
+          graphKeyToFilesRef.current.set(
+            String(n.key),
+            Array.isArray(n?.related_files) ? n.related_files : []
+          );
+        });
+      } catch {
+        setGraphAllNodes([]);
+        graphLabelToKeyRef.current = new Map();
+        graphKeyToFilesRef.current = new Map();
+      }
+    }, [mindmap.id]);
+
+    // 초기 로드
+    useEffect(() => { void loadGraphDetail(); }, [loadGraphDetail]);
+
     useEffect(() => {
-        let timer: number | null = null;
-
-        const checkLatestHistory = async () => {
-            try {
-                const data = await getMindmapPromptHistories(mindmap.id, { page: 0, size: 5 });
-                const content = (data as PageResponse<PromptHistoryItem>).content;
-                if (Array.isArray(content) && content.length > 0) {
-                    const newest = content.reduce((acc, cur) => acc && new Date(acc.createdAt) > new Date(cur.createdAt) ? acc : cur);
-                    const newestAt = newest.createdAt;
-                    if (lastHistoryMaxCreatedAt === null) {
-                        setLastHistoryMaxCreatedAt(newestAt);
-                    } else if (new Date(newestAt).getTime() > new Date(lastHistoryMaxCreatedAt).getTime()) {
-                        setLastHistoryMaxCreatedAt(newestAt);
-                        // Dispatch event so ChatPanel can append the assistant message
-                        window.dispatchEvent(new Event('mindmap:analysis_prompt'));
-                    }
-                }
-            } catch {
-                // ignore errors silently
-            }
-        };
-
-        void checkLatestHistory();
-        timer = window.setInterval(() => { void checkLatestHistory(); }, 6000);
-
-        return () => {
-            if (timer) window.clearInterval(timer);
-        };
-    }, [mindmap.id, lastHistoryMaxCreatedAt]);
-
-    useEffect(() => {
-        const baseUrl = (httpClient.defaults.baseURL as string) || '';
-        if (!baseUrl) return;
         const es = connectMindmapSSE({
-            baseUrl,
             mapId: mindmap.id,
+            onOpen: () => {
+                try { console.log('[SSE] connected to mindmap', mindmap.id); } catch {}
+            },
             onMessage: (msg) => {
                 const t = msg?.type;
                 if (!t) return;
@@ -140,15 +140,44 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                 if (t === 'USER_JOINED' || t === 'USER_LEFT') {
                     getConnectedUsers(mindmap.id).then((list) => setConnectedUsers(Array.isArray(list) ? list : [])).catch(() => {});
                 }
+
+                // Normalize event types coming from backend (e.g., mindmap-update, mindmap_update)
+                const norm = String(t).toLowerCase().replaceAll('_', '-');
+
+                // Connected notice
+                if (norm === 'connected') {
+                    try { toast.success('실시간 연결 완료'); } catch {}
+                    return;
+                }
+
+                // Mindmap graph changed -> reload nodes/suggestions
+                if (norm === 'mindmap-update' || norm === 'graph-updated' || norm === 'mindmap-updated') {
+                    void loadGraphDetail();
+                    return;
+                }
+
+                // Prompt progress/completion -> notify ChatPanel to append assistant message
+                if (norm === 'prompt-ready' || norm === 'prompt-applied' || norm === 'prompt_applied') {
+                    // Dispatch distinct events for chat panel
+                    const evName = norm === 'prompt-ready' ? 'mindmap:prompt_ready' : 'mindmap:prompt_applied';
+                    try {
+                        window.dispatchEvent(new CustomEvent(evName, { detail: msg }));
+                    } catch {
+                        window.dispatchEvent(new Event(evName));
+                    }
+                    // 최신 그래프가 이미 반영되었을 수 있지만, 안전하게 한 번 더 갱신
+                    void loadGraphDetail();
+                    return;
+                }
             },
-            onError: () => {
-                // silent
+            onError: (ev) => {
+                try { console.warn('[SSE] error', ev); toast.error('실시간 연결 오류가 발생했습니다.'); } catch {}
             },
         });
         return () => {
             es.close();
         };
-    }, [mindmap.id]);
+    }, [mindmap.id, loadGraphDetail]);
 
     useEffect(() => {
         if (!diagramRef.current || diagramInstance.current) return;
@@ -452,48 +481,6 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
 
     // Fetch suggestion graph (AI 추천 노드/엣지)
     // 컴포넌트 상단에 ref 먼저 선언
-
-  // ↓ 기존 useEffect 수정본
-  useEffect(() => {
-    let mounted = true;
-    const run = async () => {
-      try {
-        const detail = await getMindmapDetail(mindmap.id);
-        const nodes = detail.mindmapGraph?.nodes || [];
-        const aggNodes = nodes.filter((n: any) => n.node_type === 'AGGREGATED_SUGGESTIONS');
-
-        if (mounted) {
-          setGraphAllNodes(nodes);
-          setAggregatedSuggestionNodes(aggNodes);
-
-          // ★ 여기 추가: 그래프 매핑 구성
-          graphLabelToKeyRef.current = new Map();
-          graphKeyToFilesRef.current = new Map();
-
-          nodes.forEach((n: any) => {
-            if (n?.label && n?.key) {
-              graphLabelToKeyRef.current.set(String(n.label), String(n.key)); // 라벨 → 그래프 key
-            }
-            graphKeyToFilesRef.current.set(
-              String(n.key),
-              Array.isArray(n?.related_files) ? n.related_files : []
-            );
-          });
-        }
-      } catch {
-        if (mounted) {
-          setGraphAllNodes([]);
-          // 실패 시 매핑도 초기화
-          graphLabelToKeyRef.current = new Map();
-          graphKeyToFilesRef.current = new Map();
-        }
-      }
-    };
-    void run();
-    return () => {
-      mounted = false;
-    };
-  }, [mindmap.id]);
 
     // Render suggestion nodes into GoJS diagram
     useEffect(() => {

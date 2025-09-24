@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { PromptHistoryItem, PageResponse } from '../../../api/mindmap';
 import { getMindmapPromptHistories } from '../../../api/mindmap';
 
-export function HistoryList({ mapId }: { mapId: number; onUsePrompt?: (p: string) => void }) {
+export function HistoryList({ mapId, onUsePrompt }: { mapId: number; onUsePrompt?: (item: PromptHistoryItem) => void }) {
   const [items, setItems] = useState<PromptHistoryItem[]>([]);
   const [page, setPage] = useState(0);
   const [size] = useState(10);
@@ -59,7 +59,14 @@ export function HistoryList({ mapId }: { mapId: number; onUsePrompt?: (p: string
           <ul className="space-y-2">
             {items.map(h => (
               <li key={h.historyId}>
-                <div className="w-full p-3 text-left transition bg-white border rounded-lg group border-neutral-200 hover:bg-sky-50/60">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onUsePrompt) onUsePrompt(h);
+                    try { window.dispatchEvent(new CustomEvent('mindmap:prompt_show', { detail: h })); } catch { window.dispatchEvent(new Event('mindmap:prompt_show')); }
+                  }}
+                  className="w-full p-3 text-left transition bg-white border rounded-lg group border-neutral-200 hover:bg-sky-50/60"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-[11px] text-neutral-500 flex items-center gap-2">
                       <span className={`inline-block h-1.5 w-1.5 rounded-full ${h.applied ? 'bg-emerald-500' : 'bg-neutral-300'}`}></span>
@@ -68,7 +75,7 @@ export function HistoryList({ mapId }: { mapId: number; onUsePrompt?: (p: string
                   </div>
                   <div className="mt-1 text-[13px] font-medium text-neutral-800 line-clamp-2">{h.summary || h.prompt}</div>
                   <div className="text-[12px] text-neutral-600 line-clamp-2">{h.prompt}</div>
-                </div>
+                </button>
               </li>
             ))}
           </ul>
