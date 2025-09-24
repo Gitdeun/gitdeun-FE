@@ -1,11 +1,25 @@
 import { useState } from 'react';
-import { MoreVertical, Reply, Heart, Flag, Edit3, Trash2, AlertTriangle } from 'lucide-react';
+import { MoreVertical, Reply, Edit3, Trash2, AlertTriangle } from 'lucide-react';
 import { Button } from '../ui/button.tsx';
 import { Textarea } from '../ui/textarea.tsx';
 import { Avatar } from '../ui/avatar.tsx';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu.tsx';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '../ui/dropdown-menu.tsx';
 import { Badge } from '../ui/badge.tsx';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog.tsx';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '../ui/alert-dialog.tsx';
 
 export interface Comment {
   id: string;
@@ -18,6 +32,9 @@ export interface Comment {
   reportCount?: number;
   isEditing?: boolean;
   lineNumber?: number;
+  avatarUrl?: string;
+  isDeleted?: boolean;
+  menuHidden?: boolean;
 }
 
 interface CommentThreadProps {
@@ -25,26 +42,24 @@ interface CommentThreadProps {
   onReply: (parentId: string, content: string) => void;
   onEdit: (commentId: string, newContent: string) => void;
   onDelete: (commentId: string) => void;
-  onLike: (commentId: string) => void;
-  onReport: (commentId: string) => void;
+  onLike?: (commentId: string) => void;
+  onReport?: (commentId: string) => void;
   depth?: number;
 }
 
-export function CommentThread({ 
-  comment, 
-  onReply, 
-  onEdit, 
-  onDelete, 
-  onLike, 
-  onReport, 
-  depth = 0 
+export function CommentThread({
+  comment,
+  onReply,
+  onEdit,
+  onDelete,
+  depth = 0
 }: CommentThreadProps) {
   const [isReplying, setIsReplying] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [replyContent, setReplyContent] = useState('');
   const [editContent, setEditContent] = useState(comment.content);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [showReportDialog, setShowReportDialog] = useState(false);
+  const [imgFailed, setImgFailed] = useState(false);
 
   const handleReply = () => {
     if (replyContent.trim()) {
@@ -66,11 +81,6 @@ export function CommentThread({
     setShowDeleteDialog(false);
   };
 
-  const handleReport = () => {
-    onReport(comment.id);
-    setShowReportDialog(false);
-  };
-
   const formatTime = (date: Date) => {
     const now = new Date();
     const diff = now.getTime() - date.getTime();
@@ -84,21 +94,33 @@ export function CommentThread({
     return `${days}일 전`;
   };
 
+  const contentText = comment.isDeleted ? '사용자가 삭제한 댓글입니다.' : comment.content;
+
   return (
     <div className={`${depth > 0 ? 'ml-8 mt-3' : 'mt-4'}`}>
       <div className="flex gap-3">
-        <Avatar className="w-8 h-8">
-          <div className="w-full h-full bg-blue-500 rounded-full flex items-center justify-center text-white text-sm">
-            {comment.author.charAt(0).toUpperCase()}
-          </div>
+        <Avatar className="w-8 h-8 overflow-hidden ring-1 ring-blue-100">
+          {comment.avatarUrl && !imgFailed ? (
+            <img
+              src={comment.avatarUrl}
+              alt={`${comment.author || '사용자'}의 프로필 사진`}
+              className="object-cover w-full h-full rounded-full"
+              onError={() => setImgFailed(true)}
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div className="flex items-center justify-center w-full h-full text-sm text-white bg-blue-500 rounded-full">
+              {(comment.author?.[0] || 'U').toUpperCase()}
+            </div>
+          )}
         </Avatar>
 
         <div className="flex-1">
-          <div className="bg-blue-50 rounded-lg p-3">
+          <div className="p-3 rounded-lg bg-blue-50">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <span className="text-blue-900 text-sm">{comment.author}</span>
-                <span className="text-gray-500 text-xs">{formatTime(comment.timestamp)}</span>
+                <span className="text-sm text-blue-900">{comment.author || '익명'}</span>
+                <span className="text-xs text-gray-500">{formatTime(comment.timestamp)}</span>
                 {comment.reportCount && comment.reportCount >= 5 && (
                   <Badge variant="destructive" className="text-xs">
                     <AlertTriangle className="w-3 h-3 mr-1" />
@@ -106,28 +128,37 @@ export function CommentThread({
                   </Badge>
                 )}
               </div>
+              {!comment.menuHidden && !comment.isDeleted && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="w-6 h-6 p-0">
+                      <MoreVertical className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="p-1 bg-white border rounded-md shadow-md"
+                  >
+                    <DropdownMenuItem
+                      onClick={() => setIsEditing(true)}
+                      className="group flex items-center gap-2 rounded-sm px-2 py-1.5 transition-colors
+                                hover:bg-blue-50 hover:text-blue-700 focus:bg-blue-50 focus:text-blue-700"
+                    >
+                      <Edit3 className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                      수정
+                    </DropdownMenuItem>
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                    <MoreVertical className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => setIsEditing(true)}>
-                    <Edit3 className="w-4 h-4 mr-2" />
-                    수정
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setShowDeleteDialog(true)}>
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    삭제
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setShowReportDialog(true)}>
-                    <Flag className="w-4 h-4 mr-2" />
-                    신고
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    <DropdownMenuItem
+                      onClick={() => setShowDeleteDialog(true)}
+                      className="group flex items-center gap-2 rounded-sm px-2 py-1.5 transition-colors
+                                hover:bg-red-50 hover:text-red-700 focus:bg-red-50 focus:text-red-700"
+                    >
+                      <Trash2 className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+                      삭제
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
 
             {isEditing ? (
@@ -147,7 +178,13 @@ export function CommentThread({
                 </div>
               </div>
             ) : (
-              <p className="text-gray-800 whitespace-pre-wrap">{comment.content}</p>
+              <p
+                className={`whitespace-pre-wrap ${
+                  comment.isDeleted ? 'text-gray-400 italic' : 'text-gray-800'
+                }`}
+              >
+                {contentText}
+              </p>
             )}
           </div>
 
@@ -155,18 +192,10 @@ export function CommentThread({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => onLike(comment.id)}
-              className={`h-6 px-2 ${comment.isLiked ? 'text-red-500' : 'text-gray-500'}`}
-            >
-              <Heart className={`w-4 h-4 mr-1 ${comment.isLiked ? 'fill-current' : ''}`} />
-              {comment.likes || 0}
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
               onClick={() => setIsReplying(!isReplying)}
               className="h-6 px-2 text-gray-500"
+              disabled={comment.isDeleted}
+              title={comment.isDeleted ? '삭제된 댓글에는 답글을 달 수 없습니다.' : undefined}
             >
               <Reply className="w-4 h-4 mr-1" />
               답글
@@ -192,26 +221,22 @@ export function CommentThread({
             </div>
           )}
 
-          {comment.replies && comment.replies.map((reply) => (
-            <CommentThread
-              key={reply.id}
-              comment={reply}
-              onReply={onReply}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onLike={onLike}
-              onReport={onReport}
-              depth={depth + 1}
-            />
-          ))}
+          {comment.replies &&
+            comment.replies.map((reply) => (
+              <CommentThread
+                key={reply.id}
+                comment={reply}
+                onReply={onReply}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                depth={depth + 1}
+              />
+            ))}
         </div>
       </div>
-
-      {/* Delete Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
-          <AlertDialogHeader>❓
-
+          <AlertDialogHeader>
             <AlertDialogTitle>댓글 삭제</AlertDialogTitle>
             <AlertDialogDescription>
               이 댓글을 삭제하시겠습니까? 삭제된 댓글은 복구할 수 없습니다.
@@ -221,24 +246,6 @@ export function CommentThread({
             <AlertDialogCancel>취소</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
               삭제
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Report Dialog */}
-      <AlertDialog open={showReportDialog} onOpenChange={setShowReportDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>댓글 신고</AlertDialogTitle>
-            <AlertDialogDescription>
-              이 댓글을 신고하시겠습니까? 신고가 5회 이상 접수되면 관리자에게 알림이 전송됩니다.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>취소</AlertDialogCancel>
-            <AlertDialogAction onClick={handleReport} className="bg-orange-600 hover:bg-orange-700">
-              신고
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
