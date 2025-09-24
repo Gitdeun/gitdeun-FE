@@ -1,19 +1,26 @@
-// layouts/Layout.tsx
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import Header from "../components/Header";
 
 export default function Layout() {
+  const { pathname } = useLocation();
+  const showFooter =
+    pathname === "/login" ||
+    pathname === "/mindmap" ||
+    pathname.startsWith("/mindmap/");
+
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="flex flex-col min-h-screen">
       <Header />
 
       <main className="flex-1">
-        <Outlet /> 
+        <Outlet />
       </main>
 
-      <footer className="bg-gray-200 text-center py-2 text-sm">
-        © 2025 동서남북
-      </footer>
+      {showFooter && (
+        <footer className="py-2 text-sm text-center bg-gray-200">
+          © 2025 동서남북
+        </footer>
+      )}
     </div>
   );
 }
