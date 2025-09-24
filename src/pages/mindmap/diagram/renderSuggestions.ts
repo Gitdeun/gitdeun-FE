@@ -1,19 +1,12 @@
 import go from 'gojs';
 import type { MindmapGraphNode } from '../../../api/mindmap';
 
-/**
- * Render aggregated suggestion nodes into the given GoJS diagram.
- * - Tries to anchor each suggestion near a relevant existing node by parsing the label (e.g., "코드 추천 - 알림 시스템").
- * - Falls back to a spread-out grid under the root when no target match is found.
- * - Uses the 'SuggestionLink' linkCategory for lighter, straight links.
- */
 export function renderAggregatedSuggestions(diagram: go.Diagram, aggregatedSuggestionNodes: MindmapGraphNode[] | null) {
   const d = diagram;
   if (!d) return;
 
   const model = d.model as go.TreeModel;
 
-  // Remove existing suggestion nodes first to refresh
   d.startTransaction('Refresh Suggestions');
   const toRemove: any[] = [];
   (model.nodeDataArray as any[]).forEach(nd => {

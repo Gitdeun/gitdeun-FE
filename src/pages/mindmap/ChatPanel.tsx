@@ -74,9 +74,7 @@ export const ChatPanel: React.FC<{ mapId: number; showHistory?: boolean }> = ({ 
         <div className="text-sm font-semibold text-sky-700">AI Chat</div>
       </div>
       <div className="flex-1 flex overflow-hidden min-w-0">
-        {/* Removed history list from ChatPanel */}
 
-        {/* Chat area */}
         <div className={'flex-1 min-w-0 flex flex-col'}>
           <div ref={listRef} className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4" aria-live="polite">
             {messages.map((m) => (
