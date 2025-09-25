@@ -152,10 +152,9 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                     return;
                 }
 
-                // Mindmap graph changed -> reload nodes/suggestions and notify chat
+                // Mindmap graph changed -> reload nodes/suggestions; do not open chat
                 if (norm === 'mindmap-update' || norm === 'graph-updated' || norm === 'mindmap-updated') {
                     void loadGraphDetail();
-                    setChatOpen(true);
                     const detail = (msg && (msg as any).payload != null) ? (msg as any).payload : msg;
                     queueMicrotask(() => {
                         try {
