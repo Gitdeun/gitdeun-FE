@@ -9,7 +9,7 @@ import { ChatPanel } from './ChatPanel';
 import { HistoryList } from './components/HistoryList';
 import { transformDataForMindMapSample } from './utils/transform';
 import { renderAggregatedSuggestions } from './diagram/renderSuggestions';
-import { updateMindmapTitle, deleteMindmap, getConnectedUsers, getMindmapDetail, type ConnectedUser, connectMindmapSSE, type MindmapGraphNode } from '../../api/mindmap';
+import { updateMindmapTitle, deleteMindmap, getConnectedUsers, getMindmapDetail, type ConnectedUser, connectMindmapSSE, type MindmapGraphNode, refreshMindmap } from '../../api/mindmap';
 
 
 export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBack: () => void; }) {
@@ -28,6 +28,7 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
     const [showSuggestions] = useState(true);
     useEffect(() => { setTitle(mindmap.title); }, [mindmap.title]);
     const navigate = useNavigate();
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [hoverCard, setHoverCard] = useState<{
       visible: boolean;
       left: number;
@@ -151,10 +152,9 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                     return;
                 }
 
-                // Mindmap graph changed -> reload nodes/suggestions and notify chat
+                // Mindmap graph changed -> reload nodes/suggestions; do not open chat
                 if (norm === 'mindmap-update' || norm === 'graph-updated' || norm === 'mindmap-updated') {
                     void loadGraphDetail();
-                    setChatOpen(true);
                     const detail = (msg && (msg as any).payload != null) ? (msg as any).payload : msg;
                     queueMicrotask(() => {
                         try {
@@ -530,6 +530,20 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
         }
     };
 
+    const handleRefresh = async () => {
+        if (isRefreshing) return;
+        setIsRefreshing(true);
+        try {
+            await refreshMindmap(mindmap.id);
+            toast.success('새로고침을 시작했습니다. 잠시 후 반영됩니다.');
+        } catch (e: any) {
+            const msg = e?.response?.data?.message || e?.message || '새로고침 중 오류가 발생했습니다.';
+            toast.error(msg);
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
     return (
         <div className="flex flex-col h-screen bg-gradient-to-b from-slate-50 to-slate-100">
             <Header
@@ -594,25 +608,28 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                     </div>
                 </div>
                 <div className="relative border-l border-neutral-200 w-12 min-w-[48px] sm:w-14 sm:min-w-[56px] bg-white">
-                  <div className="flex flex-col items-center h-full gap-2 py-3">
-                    <div className="grid w-8 h-8 text-sm font-bold text-white rounded-lg select-none bg-sky-600 place-items-center">AI</div>
-                    <div className="w-6 h-px my-1 bg-neutral-200" />
-                    <button className="grid rounded-lg w-9 h-9 hover:bg-neutral-100 place-items-center" title="새 채팅" onClick={() => { setChatOpen(true); setHistoryOpen(false); }}>
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5"><path d="M12 5v14M5 12h14" strokeLinecap="round"/></svg>
-                    </button>
-                    <button className="grid rounded-lg w-9 h-9 hover:bg-neutral-100 place-items-center" title="히스토리" onClick={() => { setHistoryOpen(true); setChatOpen(false); }}>
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5"><path d="M4 19V7a2 2 0 0 1 2-2h10"/><rect x="8" y="5" width="12" height="14" rx="2"/></svg>
-                    </button>
-                    <div className="w-6 h-px mt-2 bg-neutral-200" />
-                    <div className="flex flex-col items-center flex-1 w-full gap-1 pt-1 overflow-y-auto">
-                    </div>
-                    <button
-                      className="grid mb-2 border rounded-lg w-9 h-9 place-items-center bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100"
-                      title="AI 패널 열기"
-                      onClick={() => { setChatOpen(true); setHistoryOpen(false); }}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5"><path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    </button>
+                    <div className="flex flex-col items-center h-full gap-2 py-3">
+                      <div className="grid w-8 h-8 text-sm font-bold text-white rounded-lg select-none bg-sky-600 place-items-center">AI</div>
+                      <div className="w-6 h-px my-1 bg-neutral-200" />
+                      <button
+                        className={`grid rounded-lg w-9 h-9 place-items-center hover:bg-neutral-100 ${isRefreshing ? 'text-sky-400' : ''}`}
+                        title="새로고침"
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`}> 
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      </button>
+                      <button className="grid rounded-lg w-9 h-9 hover:bg-neutral-100 place-items-center" title="새 채팅" onClick={() => { setChatOpen(true); setHistoryOpen(false); }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5"><path d="M12 5v14M5 12h14" strokeLinecap="round"/></svg>
+                      </button>
+                      <button className="grid rounded-lg w-9 h-9 hover:bg-neutral-100 place-items-center" title="히스토리" onClick={() => { setHistoryOpen(true); setChatOpen(false); }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5"><path d="M4 19V7a2 2 0 0 1 2-2h10"/><rect x="8" y="5" width="12" height="14" rx="2"/></svg>
+                      </button>
+                      <div className="w-6 h-px mt-2 bg-neutral-200" />
+                      <div className="flex flex-col items-center flex-1 w-full gap-1 pt-1 overflow-y-auto">
+                      </div>
                   </div>
                   {/* Slide-out Chat overlay */}
                   <div className={`pointer-events-none absolute inset-0 right-0 ${chatOpen ? 'z-30' : 'z-[-1]'}`}>
