@@ -9,7 +9,7 @@ import { ChatPanel } from './ChatPanel';
 import { HistoryList } from './components/HistoryList';
 import { transformDataForMindMapSample } from './utils/transform';
 import { renderAggregatedSuggestions } from './diagram/renderSuggestions';
-import { updateMindmapTitle, deleteMindmap, getConnectedUsers, getMindmapDetail, type ConnectedUser, connectMindmapSSE, type MindmapGraphNode, refreshMindmap } from '../../api/mindmap';
+import { updateMindmapTitle, deleteMindmap, getMindmapDetail, getConnectedUsers, type ConnectedUser, connectMindmapSSE, type MindmapGraphNode, refreshMindmap } from '../../api/mindmap';
 
 
 export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBack: () => void; }) {
@@ -72,25 +72,7 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
   };
 
 
-    // Poll connected users every 10s
-    useEffect(() => {
-        let cancelled = false;
-        let timer: number | null = null;
-        const load = async () => {
-            try {
-                const list = await getConnectedUsers(mindmap.id);
-                if (!cancelled) setConnectedUsers(Array.isArray(list) ? list : []);
-            } catch {
-                if (!cancelled) setConnectedUsers([]);
-            }
-        };
-        void load();
-        timer = window.setInterval(() => { void load(); }, 100000);
-        return () => {
-            cancelled = true;
-            if (timer) window.clearInterval(timer);
-        };
-    }, [mindmap.id]);
+    // Connected users are now driven purely by SSE; no polling
 
     // 공통 그래프 로더 (초기 로드 및 SSE 갱신에서 사용)
     const loadGraphDetail = useCallback(async () => {
@@ -127,23 +109,24 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
     useEffect(() => {
         const es = connectMindmapSSE({
             mapId: mindmap.id,
-            onOpen: () => {
-                try { console.log('[SSE] connected to mindmap', mindmap.id); } catch {}
+            onOpen: async () => {
+                try {
+                    console.log('[SSE] connected to mindmap', mindmap.id);
+                    const list = await getConnectedUsers(mindmap.id);
+                    setConnectedUsers(Array.isArray(list) ? list : []);
+                } catch {
+                    setConnectedUsers([]);
+                }
             },
             onMessage: (msg) => {
                 console.log('[SSE message]', msg);
                 const t = msg?.type;
                 if (!t) return;
-                // If server pushes full list
+                // If server pushes full list, use it directly
                 if (t === 'USERS_UPDATE' && Array.isArray(msg.payload)) {
                     setConnectedUsers(msg.payload as ConnectedUser[]);
                 }
-                // If server signals join/leave, refresh list
-                if (t === 'USER_JOINED' || t === 'USER_LEFT') {
-                    getConnectedUsers(mindmap.id).then((list) => setConnectedUsers(Array.isArray(list) ? list : [])).catch(() => {});
-                }
 
-                // Normalize event types coming from backend (e.g., mindmap-update, mindmap_update)
                 const norm = String(t).toLowerCase().replaceAll('_', '-');
 
                 // Connected notice
@@ -152,8 +135,7 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                     return;
                 }
 
-                // Mindmap graph changed -> reload nodes/suggestions; do not open chat
-                if (norm === 'mindmap-update' || norm === 'graph-updated' || norm === 'mindmap-updated') {
+                if (norm === 'mindmap-update') {
                     void loadGraphDetail();
                     const detail = (msg && (msg as any).payload != null) ? (msg as any).payload : msg;
                     queueMicrotask(() => {
@@ -166,11 +148,8 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                     return;
                 }
 
-                // Prompt progress/completion -> notify ChatPanel to append assistant message
                 if (norm === 'prompt-ready' || norm === 'prompt-applied' ) {
-                    // Ensure ChatPanel is visible/mounted first
                     setChatOpen(true);
-                    // Dispatch distinct events for chat panel after a microtask so listeners are attached
                     const evName = norm === 'prompt-ready' ? 'mindmap:prompt_ready' : 'mindmap:prompt_applied';
                     const detail = (msg && (msg as any).payload != null) ? (msg as any).payload : msg;
                     queueMicrotask(() => {
@@ -494,10 +473,7 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
         };
     }, [mindmap]);
 
-    // Fetch suggestion graph (AI 추천 노드/엣지)
-    // 컴포넌트 상단에 ref 먼저 선언
 
-    // Render suggestion nodes into GoJS diagram
     useEffect(() => {
         const d = diagramInstance.current;
         if (!d || !graphAllNodes) return;
@@ -514,9 +490,7 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
     }, [aggregatedSuggestionNodes, graphAllNodes, showSuggestions]);
 
     const handleInvite = () => setInviteModalOpen(true);
-    const handleLeave = () => {
-        if (window.confirm("정말로 프로젝트를 나가시겠습니까?")) { toast.info("프로젝트에서 나갔습니다."); }
-    };
+  
 
     const handleRename = async (nextTitle: string) => {
         try {
@@ -550,7 +524,6 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                 projectName={title}
                 onBack={onBack}
                 onInvite={handleInvite}
-                onLeave={handleLeave}
                 onRename={handleRename}
                 connectedUsers={connectedUsers}
                 onDelete={async () => {
