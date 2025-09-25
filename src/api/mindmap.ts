@@ -13,6 +13,11 @@ export const createMindmapAsync = async (repoUrl: string, title?: string): Promi
   return res.data as MindmapAsyncResponse;
 };
 
+export const refreshMindmap = async (mapId: number): Promise<{ message: string }> => {
+  const res = await httpClient.post(`/mindmaps/${mapId}/refresh`);
+  return res.data;
+};
+
 export type MindmapGraphNode = {
   key: string;
   label: string;

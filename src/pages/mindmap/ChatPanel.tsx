@@ -55,20 +55,9 @@ export const ChatPanel: React.FC<{ mapId: number; showHistory?: boolean }> = ({ 
       setMessages(prev => [...prev, m]);
       setPendingAnalysisCount((c) => Math.max(0, c - 1));
     };
-    const onMindmapUpdated = (_e: Event) => {
-      const m: ChatMessage = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: '마인드맵이 업데이트되었습니다.',
-        createdAt: new Date().toISOString(),
-      };
-      setMessages(prev => [...prev, m]);
-    };
     window.addEventListener('mindmap:prompt_applied', onPromptApplied);
-    window.addEventListener('mindmap:mindmap_updated', onMindmapUpdated);
     return () => {
       window.removeEventListener('mindmap:prompt_applied', onPromptApplied);
-      window.removeEventListener('mindmap:mindmap_updated', onMindmapUpdated);
     };
   }, []);
 
