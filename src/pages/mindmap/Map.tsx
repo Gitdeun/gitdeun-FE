@@ -196,7 +196,11 @@ const MindmapPage: React.FC = () => {
   const togglePin = async (mindmapId: number) => {
     try {
       if (pinnedIdSet.has(mindmapId)) {
-        await unpinVisit(mindmapId);
+        // Find corresponding historyId from pinned list first, then visits
+        const histId = pinned.find(p => p.mindmapId === mindmapId)?.visitHistoryId
+          ?? visitItems.find(v => v.mindmapId === mindmapId)?.visitHistoryId;
+        if (!histId) throw new Error('해당 항목의 historyId를 찾을 수 없습니다.');
+        await unpinVisit(histId);
         const removed = pinned.find(p => p.mindmapId === mindmapId) || null;
         setPinned(prev => prev.filter(p => p.mindmapId !== mindmapId));
         if (removed && !visitItems.some(v => v.mindmapId === mindmapId)) {
@@ -204,7 +208,11 @@ const MindmapPage: React.FC = () => {
         }
         toast.success('핀 해제되었습니다.');
       } else {
-        await pinVisit(mindmapId);
+        // Find corresponding historyId from visitItems to pin
+        const histId = visitItems.find(v => v.mindmapId === mindmapId)?.visitHistoryId
+          ?? pinned.find(p => p.mindmapId === mindmapId)?.visitHistoryId;
+        if (!histId) throw new Error('해당 항목의 historyId를 찾을 수 없습니다.');
+        await pinVisit(histId);
         const found = visitItems.find(v => v.mindmapId === mindmapId);
         if (found) setPinned(prev => [found, ...prev]);
         // remove from main grid immediately

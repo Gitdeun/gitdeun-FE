@@ -43,12 +43,12 @@ export async function getPinnedVisits() {
   return res.data;
 }
 
-export async function pinVisit(historyIdOrMindmapId: number) {
-  return httpClient.post(`/history/${historyIdOrMindmapId}/pin`);
+export async function pinVisit(historyId: number) {
+  return httpClient.post(`/history/${historyId}/pin`);
 }
 
-export async function unpinVisit(historyIdOrMindmapId: number) {
-  return httpClient.delete(`/history/${historyIdOrMindmapId}/pin`);
+export async function unpinVisit(historyId: number) {
+  return httpClient.delete(`/history/${historyId}/pin`);
 }
 
 
