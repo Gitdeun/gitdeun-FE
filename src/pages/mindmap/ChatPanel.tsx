@@ -18,24 +18,58 @@ export const ChatPanel: React.FC<{ mapId: number; showHistory?: boolean }> = ({ 
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
 
+  // Load persisted messages when mapId changes
   useEffect(() => {
-    setMessages([]);
+    try {
+      const raw = sessionStorage.getItem(`chat:${mapId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw) as ChatMessage[];
+        if (Array.isArray(parsed)) setMessages(parsed);
+        else setMessages([]);
+      } else {
+        setMessages([]);
+      }
+    } catch {
+      setMessages([]);
+    }
     setPendingAnalysisCount(0);
   }, [mapId]);
 
+  // Persist messages on change
   useEffect(() => {
-    const handler = (_e: Event) => {
+    try {
+      sessionStorage.setItem(`chat:${mapId}`, JSON.stringify(messages));
+    } catch {}
+  }, [messages, mapId]);
+
+  // Listen to SSE-driven chat events
+  useEffect(() => {
+    const onPromptApplied = () => {
+      const content = '요청하신 변경 사항이 마인드맵에 적용되었습니다.';
       const m: ChatMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: '요청하신 내용을 적용시켰습니다.',
+        content: `${content}`,
         createdAt: new Date().toISOString(),
       };
       setMessages(prev => [...prev, m]);
       setPendingAnalysisCount((c) => Math.max(0, c - 1));
     };
-    window.addEventListener('mindmap:analysis_prompt', handler);
-    return () => window.removeEventListener('mindmap:analysis_prompt', handler);
+    const onMindmapUpdated = (_e: Event) => {
+      const m: ChatMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: '마인드맵이 업데이트되었습니다.',
+        createdAt: new Date().toISOString(),
+      };
+      setMessages(prev => [...prev, m]);
+    };
+    window.addEventListener('mindmap:prompt_applied', onPromptApplied);
+    window.addEventListener('mindmap:mindmap_updated', onMindmapUpdated);
+    return () => {
+      window.removeEventListener('mindmap:prompt_applied', onPromptApplied);
+      window.removeEventListener('mindmap:mindmap_updated', onMindmapUpdated);
+    };
   }, []);
 
 

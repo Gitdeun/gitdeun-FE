@@ -84,7 +84,7 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
             }
         };
         void load();
-        timer = window.setInterval(() => { void load(); }, 10000);
+        timer = window.setInterval(() => { void load(); }, 100000);
         return () => {
             cancelled = true;
             if (timer) window.clearInterval(timer);
@@ -130,6 +130,7 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                 try { console.log('[SSE] connected to mindmap', mindmap.id); } catch {}
             },
             onMessage: (msg) => {
+                console.log('[SSE message]', msg);
                 const t = msg?.type;
                 if (!t) return;
                 // If server pushes full list
@@ -150,22 +151,36 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
                     return;
                 }
 
-                // Mindmap graph changed -> reload nodes/suggestions
+                // Mindmap graph changed -> reload nodes/suggestions and notify chat
                 if (norm === 'mindmap-update' || norm === 'graph-updated' || norm === 'mindmap-updated') {
                     void loadGraphDetail();
+                    setChatOpen(true);
+                    const detail = (msg && (msg as any).payload != null) ? (msg as any).payload : msg;
+                    queueMicrotask(() => {
+                        try {
+                            window.dispatchEvent(new CustomEvent('mindmap:mindmap_updated', { detail }));
+                        } catch {
+                            window.dispatchEvent(new Event('mindmap:mindmap_updated'));
+                        }
+                    });
                     return;
                 }
 
                 // Prompt progress/completion -> notify ChatPanel to append assistant message
-                if (norm === 'prompt-ready' || norm === 'prompt-applied' || norm === 'prompt_applied') {
-                    // Dispatch distinct events for chat panel
+                if (norm === 'prompt-ready' || norm === 'prompt-applied' ) {
+                    // Ensure ChatPanel is visible/mounted first
+                    setChatOpen(true);
+                    // Dispatch distinct events for chat panel after a microtask so listeners are attached
                     const evName = norm === 'prompt-ready' ? 'mindmap:prompt_ready' : 'mindmap:prompt_applied';
-                    try {
-                        window.dispatchEvent(new CustomEvent(evName, { detail: msg }));
-                    } catch {
-                        window.dispatchEvent(new Event(evName));
-                    }
-                    // 최신 그래프가 이미 반영되었을 수 있지만, 안전하게 한 번 더 갱신
+                    const detail = (msg && (msg as any).payload != null) ? (msg as any).payload : msg;
+                    queueMicrotask(() => {
+                        try {
+                            window.dispatchEvent(new CustomEvent(evName, { detail }));
+                        } catch {
+                            window.dispatchEvent(new Event(evName));
+                        }
+                    });
+                    
                     void loadGraphDetail();
                     return;
                 }
@@ -655,4 +670,3 @@ export function MindmapDetailView({ mindmap, onBack }: { mindmap: Mindmap; onBac
         </div>
     );
 }
-
