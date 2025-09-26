@@ -11,6 +11,7 @@ import OAuthCallback from "./pages/login/OAuthCallback";
 import { MyPage } from "./pages/mypage/Mypage.tsx";
 import { Toaster } from "sonner";
 import AcceptInvitation from "./pages/invitations/AcceptInvitation";
+import NotFound404 from './pages/error/NotFound404.tsx';
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
           <Route path="post/new" element={<NewPost />} />
           <Route path="post/:id" element={<DetailPost />} />
           <Route path="mypage" element={<MyPage />} />
+          <Route path="*" element={<NotFound404 />} />
         </Route>
         <Route path="mindmap/:id" element={<Mindmap />} />
         <Route path="code" element={<Code />} />
