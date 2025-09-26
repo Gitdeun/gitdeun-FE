@@ -1,23 +1,21 @@
-import { useEffect, useState } from 'react';
-import { MessageSquare, Send, ChevronDown, ChevronUp } from 'lucide-react';
-import { Button } from '../ui/button.tsx';
-import { Textarea } from '../ui/textarea.tsx';
-import { CommentThread } from './CommentThread.tsx';
-import type { Comment } from './CommentThread.tsx';
+import { useState, useMemo } from 'react';
+import { Button } from '../ui/button';
+import { Textarea } from '../ui/textarea';
+import { CommentThread } from './CommentThread';
+import { EmojiType, EmojiTypeDetails } from '../../types';
+import { ChevronDown, ChevronRight, Pencil } from 'lucide-react';
 
-interface CommentSectionProps {
+type Comment = any;
+
+type Props = {
   comments: Comment[];
-  onAddComment: (content: string, lineNumber?: number) => void;
+  onAddComment: (content: string, type?: EmojiType) => void;
   onReply: (parentId: string, content: string) => void;
-  onEdit: (commentId: string, newContent: string) => void;
-  onDelete: (commentId: string) => void;
-  onLike: (commentId: string) => void;
-  onReport: (commentId: string) => void;
+  onEdit: (id: string, txt: string) => void;
+  onDelete: (id: string) => void;
+  onChangeRootEmoji?: (reviewId: string, type: EmojiType) => void;
   selectedLine?: number | null;
-
-  collapsed?: boolean;
-  onCollapsedChange?: (v: boolean) => void;
-}
+};
 
 export function CommentSection({
   comments,
@@ -25,124 +23,129 @@ export function CommentSection({
   onReply,
   onEdit,
   onDelete,
-  onLike,
-  onReport,
-  selectedLine,
-  collapsed,
-  onCollapsedChange,
-}: CommentSectionProps) {
-  const [newComment, setNewComment] = useState('');
-  const [internalCollapsed, setInternalCollapsed] = useState(false);
-  const isCollapsed = collapsed ?? internalCollapsed;
+  onChangeRootEmoji,
+}: Props) {
+  const [text, setText] = useState('');
+  const [selectedType, setSelectedType] = useState<EmojiType>(EmojiType.QUESTION);
 
-  useEffect(() => {
-    if (collapsed !== undefined) setInternalCollapsed(collapsed);
-  }, [collapsed]);
+  const [isListOpen, setIsListOpen] = useState(true);
+  const [isComposerOpen, setIsComposerOpen] = useState(true);
 
-  const toggle = () => {
-    if (onCollapsedChange) onCollapsedChange(!isCollapsed);
-    else setInternalCollapsed((v) => !v);
-  };
+  const typeButtons = useMemo(
+    () =>
+      [
+        EmojiType.QUESTION,
+        EmojiType.IDEA,
+        EmojiType.BUG,
+        EmojiType.IMPORTANT,
+        EmojiType.LOVE,
+      ] as EmojiType[],
+    []
+  );
 
-  const handleSubmit = () => {
-    if (newComment.trim()) {
-      onAddComment(newComment, selectedLine || undefined);
-      setNewComment('');
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      handleSubmit();
-    }
+  const submit = () => {
+    const v = text.trim();
+    if (!v) return;
+    onAddComment(v, selectedType);
+    setText('');
+    setSelectedType(EmojiType.QUESTION);
   };
 
   return (
-    <div className="flex flex-col h-full border-t border-blue-200 bg-blue-50/30">
-      <div className="flex items-center justify-between p-4 shrink-0">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="w-5 h-5 text-blue-600" />
-          <h3 className="text-blue-900">
-            댓글 {comments.length > 0 && `(${comments.length})`}
-          </h3>
-          {selectedLine && (
-            <span className="px-2 py-1 text-sm text-blue-600 bg-blue-100 rounded">
-              라인 {selectedLine}
-            </span>
-          )}
-          {isCollapsed && <span className="ml-2 text-xs text-gray-500">접힘</span>}
+    <div className="p-4 bg-slate-50/50">
+      <div className="sticky top-0 z-10 mb-3 space-y-3">
+        <div className="flex items-center justify-between px-3 py-2 border shadow-sm rounded-xl bg-white/95 backdrop-blur">
+          <div className="text-sm font-medium text-slate-700">
+            댓글 <span className="text-slate-500">({comments.length})</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsComposerOpen(v => !v)}
+              className="h-8 px-2 text-slate-600"
+              title={isComposerOpen ? '작성창 접기' : '작성창 펼치기'}
+            >
+              <Pencil className="w-4 h-4 mr-1" />
+              {isComposerOpen ? '작성창 접기' : '작성창 펼치기'}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsListOpen(v => !v)}
+              className="h-8 px-2 text-slate-600"
+              title={isListOpen ? '댓글 접기' : '댓글 펼치기'}
+            >
+              {isListOpen ? (
+                <ChevronDown className="w-4 h-4 mr-1" />
+              ) : (
+                <ChevronRight className="w-4 h-4 mr-1" />
+              )}
+              {isListOpen ? '댓글 접기' : '댓글 펼치기'}
+            </Button>
+          </div>
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={toggle}
-          className="text-xs"
-          aria-label={isCollapsed ? '댓글 펼치기' : '댓글 접기'}
-          title={isCollapsed ? '댓글 펼치기' : '댓글 접기'}
-        >
-          {isCollapsed ? (
-            <>
-              <ChevronDown className="w-4 h-4 mr-1" />
-              펼치기
-            </>
-          ) : (
-            <>
-              <ChevronUp className="w-4 h-4 mr-1" />
-              접기
-            </>
-          )}
-        </Button>
-      </div>
-      {!isCollapsed && (
-        <div className="flex-1 p-4 pt-0 overflow-y-auto">
-          <div className="mb-6 space-y-3">
-            <Textarea
-              placeholder={
-                selectedLine
-                  ? `라인 ${selectedLine}에 대한 댓글을 입력하세요...`
-                  : '댓글을 입력하세요...'
-              }
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="min-h-[100px] border-blue-200 focus:border-blue-400 bg-white"
-            />
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">
-                Ctrl+Enter를 눌러 댓글을 작성하세요
-              </span>
-              <Button
-                onClick={handleSubmit}
-                disabled={!newComment.trim()}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                <Send className="w-4 h-4 mr-2" />
-                댓글 작성
-              </Button>
-            </div>
-          </div>
-          {comments.length > 0 ? (
-            <div className="space-y-1">
-              {comments.map((comment) => (
-                <CommentThread
-                  key={comment.id}
-                  comment={comment}
-                  onReply={onReply}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                  onLike={onLike}
-                  onReport={onReport}
-                />
+        {isComposerOpen && (
+          <div className="p-3 bg-white border shadow-sm rounded-xl">
+            <div className="flex gap-2 mb-2">
+              {typeButtons.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setSelectedType(t)}
+                  className={[
+                    'px-2.5 py-1 rounded-full text-sm border transition',
+                    selectedType === t
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700',
+                  ].join(' ')}
+                  title={EmojiTypeDetails[t].label}
+                >
+                  <span className="mr-1">{EmojiTypeDetails[t].emoji}</span>
+                  {EmojiTypeDetails[t].label}
+                </button>
               ))}
             </div>
-          ) : (
-            <div className="py-8 text-center text-gray-500">
-              <MessageSquare className="w-8 h-8 mx-auto mb-2 text-blue-300" />
-              <p>아직 댓글이 없습니다.</p>
-              <p className="text-sm">첫 번째 댓글을 작성해보세요!</p>
+
+            <div className="flex items-end gap-3">
+              <Textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="댓글을 입력하세요..."
+                className="min-h-[72px] resize-y border-blue-200 focus:border-blue-400"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    submit();
+                  }
+                }}
+              />
+              <Button className="px-5 bg-blue-600 h-11 hover:bg-blue-700" onClick={submit}>
+                ✈️ 댓글 작성
+              </Button>
             </div>
-          )}
+            <div className="mt-1 text-xs text-slate-400">
+              Ctrl+Enter를 눌러 댓글을 작성하세요
+            </div>
+          </div>
+        )}
+      </div>
+
+      {isListOpen && (
+        <div className="space-y-3">
+          {comments.map((c: any) => (
+            <CommentThread
+              key={c.id}
+              comment={c}
+              onReply={onReply}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onChangeEmoji={
+                onChangeRootEmoji ? (t) => onChangeRootEmoji(c.id, t) : undefined
+              }
+            />
+          ))}
         </div>
       )}
     </div>

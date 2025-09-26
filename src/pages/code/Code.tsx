@@ -249,7 +249,11 @@ export default function CodePage() {
 
   const loadReviews = useCallback(async () => {
     if (!mapIdParam || !nodeKeyParam) return;
-    const page = await getMindmapNodeCodeReviews(Number(mapIdParam), String(nodeKeyParam), { page: 0, size: 20 });
+    const page = await getMindmapNodeCodeReviews(
+      Number(mapIdParam),
+      String(nodeKeyParam),
+      { page: 0, size: 20 }
+    );
 
     const baseThreads: Comment[] = (page.content as CodeReviewSummary[]).map((r) => ({
       id: String(r.reviewId),
@@ -277,14 +281,18 @@ export default function CodePage() {
 
             node.avatarUrl = (detail as any).authorProfileImage ?? node.avatarUrl;
 
+            (node as any).emojiType = root ? fromApiEmoji(root.emojiType as any) : null;
+
             if (isDeletedThread) {
               node.replies = [];
               (node as any).rootCommentId = undefined;
               (node as any).isDeleted = true;
               (node as any).menuHidden = true;
             } else {
-              node.replies = children.filter((c) => !(c.content === node.content && c.author === node.author));
-              (node as any).rootCommentId = root ? String(root.commentId) : undefined; // ✅ 진짜 루트
+              node.replies = children.filter(
+                (c) => !(c.content === node.content && c.author === node.author)
+              );
+              (node as any).rootCommentId = root ? String(root.commentId) : undefined;
               (node as any).isDeleted = false;
               (node as any).menuHidden = false;
             }
@@ -479,14 +487,18 @@ export default function CodePage() {
 
         node.avatarUrl = (detail as any).authorProfileImage ?? node.avatarUrl;
 
+        (node as any).emojiType = root ? fromApiEmoji(root.emojiType as any) : null;
+
         if (isDeletedThread) {
           node.replies = [];
           (node as any).rootCommentId = undefined;
           (node as any).isDeleted = true;
           (node as any).menuHidden = true;
         } else {
-          node.replies = children.filter((c) => !(c.content === node.content && c.author === node.author));
-          (node as any).rootCommentId = root ? String(root.commentId) : undefined; // ✅
+          node.replies = children.filter(
+            (c) => !(c.content === node.content && c.author === node.author)
+          );
+          (node as any).rootCommentId = root ? String(root.commentId) : undefined;
           (node as any).isDeleted = false;
           (node as any).menuHidden = false;
         }
@@ -717,6 +729,31 @@ export default function CodePage() {
     if (currentRef?.refId) await loadReferenceThreads(currentRef.refId);
   }, [currentRef?.refId, loadReferenceThreads]);
 
+  // CodePage 안
+  const handleChangeThreadEmoji = useCallback(
+    async (reviewId: string, uiType: UiEmojiType /* null 금지 */) => {
+      try {
+        // 최상단 코멘트 id 확보
+        let rootCid = (comments.find(c => c.id === reviewId) as any)?.rootCommentId;
+        if (!rootCid) {
+          const d = await getReviewDetail(Number(reviewId));
+          const root = (d.comments ?? []).sort(
+            (a,b)=>new Date(a.createdAt).getTime()-new Date(b.createdAt).getTime()
+          )[0];
+          rootCid = root ? String(root.commentId) : undefined;
+        }
+        if (!rootCid) return;
+
+        await patchCommentEmoji(rootCid, { emojiType: toApiEmoji(uiType) as any });
+        await refreshThread(reviewId);
+      } catch (e) {
+        console.error(e);
+        alert('유형 변경에 실패했어요.');
+      }
+    },
+    [comments, refreshThread]
+  );
+
   return (
     <div className="flex flex-col h-screen bg-blue-50/20">
       <div className="flex flex-1 overflow-hidden">
@@ -759,12 +796,13 @@ export default function CodePage() {
           <div className="overflow-y-auto transition-all duration-200 ease-in-out max-h-80">
             <CommentSection
               comments={comments}
-              onAddComment={(content) => void handleAddComment(content)}
+              onAddComment={(content, type) =>
+                void handleAddComment(content, undefined, type ?? EmojiTypeConst.QUESTION)
+              }
               onReply={(pid, c) => void handleReply(pid, c)}
               onEdit={(id, txt) => void handleEdit(id, txt)}
               onDelete={(id) => void handleDelete(id)}
-              onLike={() => {}}
-              onReport={() => {}}
+              onChangeRootEmoji={(reviewId, type) => void handleChangeThreadEmoji(reviewId, type)}
               selectedLine={selectedLine}
             />
           </div>
