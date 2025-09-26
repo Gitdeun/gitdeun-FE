@@ -44,12 +44,12 @@ type RefMarker = {
   filePath: string;
   startLine: number;
   endLine: number;
-  emojiType?: UiEmojiType;
+  emojiType?: UiEmojiType | null;
   count: number;
 };
 
-type CodeCommentWithStatus = CodeComment & { 
-  status?: 'OPEN' | 'RESOLVED' 
+type CodeCommentWithStatus = CodeComment & {
+  status?: 'OPEN' | 'RESOLVED'
   rootCommentId?: string;
 };
 
@@ -82,7 +82,7 @@ const toSidebarComment = (c: any): CodeComment => ({
   id: String(c.commentId),
   user: c.authorNickname ?? 'unknown',
   content: c.content ?? '',
-  type: fromApiEmoji(c.emojiType) ?? EmojiTypeConst.QUESTION,
+  type: fromApiEmoji(c.emojiType) ?? null,
   replies: (c.replies ?? []).map(toSidebarComment),
 });
 
@@ -123,15 +123,24 @@ function toLineArray(code: string): CodeLine[] {
 
 function getRootReviewId(targetId: string, threads: Comment[]): string | null {
   for (const top of threads) {
-    if (top.id === targetId) return top.id;
+    const threadId = (top as any).threadId ?? top.id; // 저장된 threadId 우선
+    if (top.id === targetId) return String(threadId);
     const stack = [...(top.replies ?? [])];
     while (stack.length) {
       const cur = stack.pop()!;
-      if (cur.id === targetId) return top.id;
+      if (cur.id === targetId) return String(threadId);
       if (cur.replies) stack.push(...cur.replies);
     }
   }
   return null;
+}
+
+function pickRootComment(comments: ReviewDetailComment[] | undefined | null) {
+  if (!comments || comments.length === 0) return undefined;
+  const byTime = [...comments].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+  return byTime[0];
 }
 
 function mapReviewCommentTree(c: ReviewDetailComment): Comment {
@@ -147,7 +156,7 @@ function mapReviewCommentTree(c: ReviewDetailComment): Comment {
   };
 }
 
-const toApiEmoji = (t: UiEmojiType): string => {
+const toApiEmoji = (t?: UiEmojiType | null): string => {
   switch (t) {
     case EmojiTypeConst.QUESTION:  return 'QUESTION';
     case EmojiTypeConst.IDEA:      return 'IDEA';
@@ -158,14 +167,14 @@ const toApiEmoji = (t: UiEmojiType): string => {
   }
 };
 
-const fromApiEmoji = (s?: string): UiEmojiType | undefined => {
+const fromApiEmoji = (s?: string): UiEmojiType | null => {
   switch (s) {
     case 'QUESTION':  return EmojiTypeConst.QUESTION;
     case 'IDEA':      return EmojiTypeConst.IDEA;
     case 'BUG':       return EmojiTypeConst.BUG;
     case 'IMPORTANT': return EmojiTypeConst.IMPORTANT;
     case 'LOVE':      return EmojiTypeConst.LOVE;
-    default:          return undefined;
+    default:          return null;
   }
 };
 
@@ -240,7 +249,11 @@ export default function CodePage() {
 
   const loadReviews = useCallback(async () => {
     if (!mapIdParam || !nodeKeyParam) return;
-    const page = await getMindmapNodeCodeReviews(Number(mapIdParam), String(nodeKeyParam), { page: 0, size: 20 });
+    const page = await getMindmapNodeCodeReviews(
+      Number(mapIdParam),
+      String(nodeKeyParam),
+      { page: 0, size: 20 }
+    );
 
     const baseThreads: Comment[] = (page.content as CodeReviewSummary[]).map((r) => ({
       id: String(r.reviewId),
@@ -258,12 +271,33 @@ export default function CodePage() {
       baseThreads.map(async (t) => {
         try {
           const detail = await getReviewDetail(Number(t.id));
+          const isDeletedThread = !detail.comments || detail.comments.length === 0;
           const children = (detail.comments ?? []).map(mapReviewCommentTree);
+          const root = pickRootComment(detail.comments);
+
           setComments((draft) => {
             const node = draft.find((x) => x.id === t.id);
             if (!node) return;
+
             node.avatarUrl = (detail as any).authorProfileImage ?? node.avatarUrl;
-            node.replies = children.filter((c) => !(c.content === node.content && c.author === node.author));
+
+            (node as any).emojiType = root ? fromApiEmoji(root.emojiType as any) : null;
+
+            if (isDeletedThread) {
+              node.replies = [];
+              (node as any).rootCommentId = undefined;
+              (node as any).isDeleted = true;
+              (node as any).menuHidden = true;
+            } else {
+              node.replies = children.filter(
+                (c) => !(c.content === node.content && c.author === node.author)
+              );
+              (node as any).rootCommentId = root ? String(root.commentId) : undefined;
+              (node as any).isDeleted = false;
+              (node as any).menuHidden = false;
+            }
+
+            (node as any).threadId = String(detail.reviewId ?? t.id);
           });
         } catch (e) {
           console.error(e);
@@ -335,7 +369,8 @@ export default function CodePage() {
             try {
               const d = await getReviewDetail(Number(related[0].reviewId));
               const first = d?.comments?.[0];
-              emoji = fromApiEmoji(first?.emojiType as any);
+              const parsed = fromApiEmoji(first?.emojiType as any);
+              emoji = (parsed ?? undefined) as UiEmojiType | undefined;
             } catch {}
           }
 
@@ -381,11 +416,11 @@ export default function CodePage() {
             : (d.comments ?? []).slice(1);
 
         threads.push({
-          id: String(reviewId),                  
+          id: String(reviewId),
           rootCommentId: String(first.commentId),
           user: first.authorNickname ?? 'unknown',
           content: first.content ?? '',
-          type: fromApiEmoji(first.emojiType) ?? EmojiTypeConst.QUESTION,
+          type: fromApiEmoji(first.emojiType) ?? null,
           replies: childrenSource.map(toSidebarComment),
           status: ((d as any).status ?? ((d as any).resolved ? 'RESOLVED' : 'OPEN')) as any,
         });
@@ -442,17 +477,47 @@ export default function CodePage() {
   const refreshThread = useCallback(async (reviewId: string) => {
     try {
       const detail = await getReviewDetail(Number(reviewId));
+      const isDeletedThread = !detail.comments || detail.comments.length === 0;
       const children = (detail.comments ?? []).map(mapReviewCommentTree);
+      const root = pickRootComment(detail.comments);
+
       setComments((draft) => {
         const node = draft.find((x) => x.id === reviewId);
         if (!node) return;
+
         node.avatarUrl = (detail as any).authorProfileImage ?? node.avatarUrl;
-        node.replies = children.filter((c) => !(c.content === node.content && c.author === node.author));
+
+        (node as any).emojiType = root ? fromApiEmoji(root.emojiType as any) : null;
+
+        if (isDeletedThread) {
+          node.replies = [];
+          (node as any).rootCommentId = undefined;
+          (node as any).isDeleted = true;
+          (node as any).menuHidden = true;
+        } else {
+          node.replies = children.filter(
+            (c) => !(c.content === node.content && c.author === node.author)
+          );
+          (node as any).rootCommentId = root ? String(root.commentId) : undefined;
+          (node as any).isDeleted = false;
+          (node as any).menuHidden = false;
+        }
+
+        (node as any).threadId = String(detail.reviewId ?? reviewId);
       });
     } catch (e) {
       console.error(e);
     }
   }, [setComments]);
+
+  const getActualCommentId = useCallback((targetId: string): string => {
+    const top = comments.find((c) => c.id === targetId);
+    if (top) {
+      const rootCid = (top as any).rootCommentId;
+      return rootCid ? String(rootCid) : targetId;
+    }
+    return targetId;
+  }, [comments]);
 
   const handleReply = async (parentId: string, content: string) => {
     if (!content.trim()) return;
@@ -473,7 +538,7 @@ export default function CodePage() {
       emojiType: toApiEmoji(EmojiTypeConst.QUESTION) as any,
     });
     if (currentRef?.refId) {
-      await loadReferenceThreads(currentRef.refId); 
+      await loadReferenceThreads(currentRef.refId);
     }
   }, [currentRef?.refId, loadReferenceThreads]);
 
@@ -481,13 +546,16 @@ export default function CodePage() {
     if (!newContent.trim()) return;
     const reviewId = getRootReviewId(commentId, comments);
     if (!reviewId) return;
-    await patchCommentApi(commentId, { content: newContent });
+    const realCommentId = getActualCommentId(commentId);
+    await patchCommentApi(realCommentId, { content: newContent });
     await refreshThread(reviewId);
   };
+
   const handleDelete = async (commentId: string) => {
     const reviewId = getRootReviewId(commentId, comments);
     if (!reviewId) return;
-    await deleteCommentApi(commentId);
+    const realCommentId = getActualCommentId(commentId);
+    await deleteCommentApi(realCommentId);
     await refreshThread(reviewId);
   };
 
@@ -533,7 +601,7 @@ export default function CodePage() {
 
           const newThread: CodeCommentWithStatus = {
             id: String(newReviewId),
-            rootCommentId: String(first.commentId), 
+            rootCommentId: String(first.commentId),
             user: first.authorNickname ?? 'unknown',
             content: first.content ?? '',
             type: fromApiEmoji(first.emojiType) ?? EmojiTypeConst.QUESTION,
@@ -628,7 +696,9 @@ export default function CodePage() {
             return {
               ...prev,
               [currentRef.refId]: list.map(t =>
-                t.id === reviewId ? { ...t, type: uiType } : t
+                t.id === reviewId
+                  ? { ...t, type: (t.type === uiType ? null : uiType) }
+                  : t
               ),
             };
           });
@@ -647,6 +717,42 @@ export default function CodePage() {
       [fileId]: toLineArray(newText),
     }));
   }, []);
+
+  const handleEditRefComment = useCallback(async (commentId: string, newText: string) => {
+    if (!newText.trim()) return;
+    await patchCommentApi(commentId, { content: newText });
+    if (currentRef?.refId) await loadReferenceThreads(currentRef.refId);
+  }, [currentRef?.refId, loadReferenceThreads]);
+
+  const handleDeleteRefComment = useCallback(async (commentId: string) => {
+    await deleteCommentApi(commentId);
+    if (currentRef?.refId) await loadReferenceThreads(currentRef.refId);
+  }, [currentRef?.refId, loadReferenceThreads]);
+
+  // CodePage 안
+  const handleChangeThreadEmoji = useCallback(
+    async (reviewId: string, uiType: UiEmojiType /* null 금지 */) => {
+      try {
+        // 최상단 코멘트 id 확보
+        let rootCid = (comments.find(c => c.id === reviewId) as any)?.rootCommentId;
+        if (!rootCid) {
+          const d = await getReviewDetail(Number(reviewId));
+          const root = (d.comments ?? []).sort(
+            (a,b)=>new Date(a.createdAt).getTime()-new Date(b.createdAt).getTime()
+          )[0];
+          rootCid = root ? String(root.commentId) : undefined;
+        }
+        if (!rootCid) return;
+
+        await patchCommentEmoji(rootCid, { emojiType: toApiEmoji(uiType) as any });
+        await refreshThread(reviewId);
+      } catch (e) {
+        console.error(e);
+        alert('유형 변경에 실패했어요.');
+      }
+    },
+    [comments, refreshThread]
+  );
 
   return (
     <div className="flex flex-col h-screen bg-blue-50/20">
@@ -682,18 +788,21 @@ export default function CodePage() {
               onChangeRefEmoji={(reviewId, commentId, type) =>
                 handleChangeRefEmoji(reviewId, commentId, type)
               }
+              onEditRefComment={(cid, txt) => handleEditRefComment(cid, txt)}
+              onDeleteRefComment={(cid) => handleDeleteRefComment(cid)}
             />
           </div>
 
           <div className="overflow-y-auto transition-all duration-200 ease-in-out max-h-80">
             <CommentSection
               comments={comments}
-              onAddComment={(content) => void handleAddComment(content)}
+              onAddComment={(content, type) =>
+                void handleAddComment(content, undefined, type ?? EmojiTypeConst.QUESTION)
+              }
               onReply={(pid, c) => void handleReply(pid, c)}
               onEdit={(id, txt) => void handleEdit(id, txt)}
               onDelete={(id) => void handleDelete(id)}
-              onLike={() => {}}
-              onReport={() => {}}
+              onChangeRootEmoji={(reviewId, type) => void handleChangeThreadEmoji(reviewId, type)}
               selectedLine={selectedLine}
             />
           </div>
