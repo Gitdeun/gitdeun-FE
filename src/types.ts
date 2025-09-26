@@ -29,7 +29,7 @@ export interface CodeComment {
   id: string;
   user: string;
   content: string;
-  type: EmojiType;
+  type: EmojiType | null;
   replies?: CodeComment[];
 }
 

@@ -17,7 +17,7 @@ type RefMarker = {
   filePath: string;
   startLine: number;
   endLine: number;
-  emojiType?: EmojiType;
+  emojiType?: EmojiType | null;
 };
 
 type EmojiCounts = Partial<Record<EmojiType, number>>;
@@ -41,6 +41,8 @@ type CodeViewerWithSelectionProps = CodeViewerProps & {
   onSaveEditedContent?: (fileId: string, newText: string) => Promise<void> | void;
 
   onChangeRefEmoji?: (reviewId: string, commentId: string, type: EmojiType) => void | Promise<void>;
+  onEditRefComment?: (commentId: string, newText: string) => Promise<void> | void;   // ✅ 추가
+  onDeleteRefComment?: (commentId: string) => Promise<void> | void;
 };
 
 const escapeHtml = (s: string) =>
@@ -66,24 +68,30 @@ const syntaxHighlight = (text: string) => {
 
 const byTypeCounts = (threadsByLine: Record<number, SidebarThread[]>) => {
   const out: Partial<Record<EmojiType, number>> = {};
-  Object.values(threadsByLine).forEach((list) =>
-    list.forEach((t) => {
+  for (const list of Object.values(threadsByLine)) {
+    for (const t of list) {
+      if (!t.type) continue;             
       out[t.type] = (out[t.type] ?? 0) + 1;
-    }),
-  );
+    }
+  }
   return out as EmojiCounts;
 };
 
 const headerEmojiCounts = (threadsByLine: Record<number, SidebarThread[]>) => {
   const out: Record<string, number> = {};
-  Object.values(threadsByLine).forEach((list) =>
-    list.forEach((t) => {
-      const e = EmojiTypeDetails[t.type].emoji;
+  for (const list of Object.values(threadsByLine)) {
+    for (const t of list) {
+      const type = t.type;
+      if (!type) continue;               
+      const det = EmojiTypeDetails[type]; 
+      if (!det) continue;
+      const e = det.emoji;
       out[e] = (out[e] ?? 0) + 1;
-    }),
-  );
+    }
+  }
   return out;
 };
+
 
 const linesToText = (lines?: CodeLine[]) => (lines ?? []).map(l => l.content).join("\n");
 
@@ -104,6 +112,8 @@ export function CodeViewer(props: CodeViewerWithSelectionProps) {
     onReplyRefReview,
     onSaveEditedContent,
     onChangeRefEmoji,
+    onEditRefComment, 
+    onDeleteRefComment,
   } = props;
 
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
@@ -396,6 +406,8 @@ export function CodeViewer(props: CodeViewerWithSelectionProps) {
             onChangeEmoji={(reviewId, commentId, type) =>
               onChangeRefEmoji?.(reviewId, commentId, type)
             }
+            onEditComment={(cid, txt) => onEditRefComment?.(cid, txt)} 
+            onDeleteComment={(cid) => onDeleteRefComment?.(cid)} 
           />
         )}
 
