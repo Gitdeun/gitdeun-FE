@@ -24,14 +24,14 @@ export default function LoginModal({ onClose }: LoginModalProps) {
           <div className="flex flex-col gap-[22px]">
             <button className="border-sky-400 border font-medium flex gap-[16px] items-center rounded-md px-[60px] py-[8px] text-sky-400 w-[350px]"
              onClick={() => {
-              window.location.href = "https://gitdeun.site/oauth2/authorization/google";
+              window.location.href = "https://api.gitdeun.site/oauth2/authorization/google";
             }}>
               <img src={Google} alt="Google logo" className="w-[28px] h-[28px]" />
               Google 계정으로 로그인
             </button>
             <button className="font-medium flex gap-[16px] items-center rounded-md px-[60px] py-[8px] text-white bg-black w-[350px]"
             onClick={() => {
-              window.location.href = "https://gitdeun.site/oauth2/authorization/github";
+              window.location.href = "https://api.gitdeun.site/oauth2/authorization/github";
             }}>
               
               <img src={Github} alt="Github logo" className="w-[28px] h-[28px]" />
