@@ -1,69 +1,143 @@
-# React + TypeScript + Vite
+# Gitdeun 🌱
+> AI 기반 Git Repository Mindmap Generator
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Gitdeun은 GitHub 저장소의 코드 구조를 AI 기반으로 분석하여  
+기능 단위의 마인드맵으로 시각화해주는 협업 플랫폼입니다.
 
-Currently, two official plugins are available:
+복잡한 프로젝트 구조를 직관적으로 이해할 수 있도록 돕고,  
+비전공자와 주니어 개발자도 빠르게 코드 흐름을 파악할 수 있도록 설계되었습니다.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## Expanding the ESLint configuration
+## 📌 프로젝트 소개
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Gitdeun은 Git Repository의 브랜치와 코드를 분석하여  
+기능 구성 요소를 자동 분류하고 마인드맵 형태로 시각화하는 서비스입니다.
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+생성형 AI를 활용해 코드 리뷰 및 기능 추천을 제공하며,  
+실시간 협업과 팀 모집 기능까지 지원하여 프로젝트 참여와 적응 과정을 돕습니다.
 
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
+특히 단순 코드 분석에서 끝나는 것이 아니라,  
+사용자가 복잡한 코드 흐름을 더 쉽게 이해하고 활용할 수 있도록  
+AI 결과를 시각적으로 구조화하는 데 집중했습니다.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+---
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+# ✨ 주요 기능
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 1. AI 기반 마인드맵 시각화
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- Google Gemini를 활용한 GitHub 코드 분석
+- 기능 단위 코드 구조 자동 분류
+- ArangoDB Graph 구조 저장
+- GoJS 기반 마인드맵 시각화
+- WebSocket 기반 실시간 마인드맵 업데이트
+
+### 기대 효과
+- 복잡한 프로젝트 구조를 직관적으로 이해 가능
+- 신규 팀원의 빠른 프로젝트 적응 지원
+- 비전공자 및 주니어 개발자의 학습 효율 향상
+
+---
+
+## 2. AI 코드 리뷰
+
+- 생성형 AI 기반 코드 분석
+- 개선점 및 리뷰 의견 제공
+- 코드 흐름 및 기능 설명 지원
+- 프롬프트 기반 기능 수정 제안
+
+### 예시
+- "이 기능을 JWT 인증 방식으로 변경해줘"
+- "코드 구조를 리팩토링해줘"
+
+---
+
+## 3. 팀 모집 기능
+
+- 관심 있는 개발 언어 기반 모집 공고 추천
+- 프로젝트 참여 기능 제공
+- 개발 언어 기반 팀원 모집 지원
+
+---
+
+# 🛠 Tech Stack
+
+## Backend
+- Spring Boot
+- FastAPI
+- Redis
+- MySQL
+- ArangoDB
+
+## Frontend
+- React
+- GoJS
+- WebSocket
+
+## AI
+- Google Gemini API
+
+## Infra
+- AWS EC2
+- AWS S3
+- Docker
+- GitHub Actions
+
+---
+
+# 🏗 Architecture
+
+Gitdeun은 다음과 같은 흐름으로 동작합니다.
+
+1. GitHub Repository 분석 요청
+2. Gemini를 활용한 코드 구조 분석
+3. 분석 결과를 ArangoDB Graph 형태로 저장
+4. GoJS를 활용한 마인드맵 시각화
+5. WebSocket 기반 실시간 동기화 제공
+
+---
+
+# 👨‍💻 담당 역할
+
+## Frontend / 서비스 기획
+
+- AI 분석 결과 기반 마인드맵 UI 구성
+- 사용자 흐름 설계 및 화면 구조 기획
+- 실시간 마인드맵 인터랙션 구현
+- 사용자 관점의 시각화 구조 개선
+- AI 결과를 직관적으로 이해할 수 있도록 UX 개선
+
+특히 단순히 AI 결과를 출력하는 것이 아니라,  
+사용자가 복잡한 코드 구조를 쉽게 이해할 수 있도록  
+정보 구조와 시각적 흐름을 지속적으로 개선했습니다.
+
+---
+
+# 🚀 기대 효과
+
+- AI 기반 코드 구조 시각화
+- 개발 협업 효율 향상
+- 신규 팀원 온보딩 시간 단축
+- 비전공자 및 주니어 개발자의 코드 이해 지원
+- 생성형 AI 기반 개발 생산성 향상
+
+---
+
+# 👥 Team
+
+동서남북
+
+- 고범석
+- 백승은
+- 오채연
+- 장욱
+
+---
+
+# 📎 Reference
+
+- 작품 소개 패널 :[깃든 판넬.pdf](https://github.com/user-attachments/files/27940385/default.pdf)
+
+
+
